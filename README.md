@@ -141,6 +141,12 @@ Click to deploy:
 
 > **Note**: Using Global CRIS profiles - works in 30+ regions worldwide. Deploy in any region, requests auto-route to optimal locations.
 
+**🇨🇳 AWS China Region (Beijing/Ningxia)**
+
+For AWS China deployments using SiliconFlow (DeepSeek, Qwen, GLM) instead of Bedrock. Download [`clawdbot-china.yaml`](clawdbot-china.yaml) and upload via CloudFormation console.
+
+**[→ Full China deployment guide (中国区部署指南)](DEPLOYMENT_CN.md)**
+
 **After deployment (~8 minutes), check CloudFormation Outputs tab**:
 
 ---
