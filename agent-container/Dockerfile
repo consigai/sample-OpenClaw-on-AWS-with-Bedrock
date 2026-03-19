@@ -26,9 +26,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 # Install OpenClaw globally via npm
 RUN npm install -g openclaw@latest
 
-# Symlink templates so OpenClaw can find them from any cwd
-RUN TEMPLATE_DIR=$(find /usr/local/lib/node_modules -path "*/openclaw/docs/reference/templates" -type d 2>/dev/null | head -1) \
-    && if [ -n "$TEMPLATE_DIR" ]; then mkdir -p /app/docs/reference && ln -sf "$TEMPLATE_DIR" /app/docs/reference/templates; fi
+# Find and copy templates so OpenClaw can find them from any cwd
+RUN mkdir -p /app/docs/reference && \
+    TEMPLATE_DIR=$(find /usr/local/lib/node_modules -path "*/openclaw/docs/reference/templates" -type d 2>/dev/null | head -1) && \
+    if [ -n "$TEMPLATE_DIR" ]; then cp -r "$TEMPLATE_DIR" /app/docs/reference/templates; \
+    else echo "WARNING: templates not found, creating empty dir" && mkdir -p /app/docs/reference/templates; fi
 
 # Install Python dependencies
 COPY agent-container/requirements.txt /tmp/requirements.txt
@@ -52,17 +54,17 @@ COPY --from=builder /usr/local/bin/aws /usr/local/bin/aws
 
 # Copy Node.js runtime + global modules from builder
 COPY --from=builder /usr/bin/node /usr/bin/node
-COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=builder /usr/lib/node_modules /usr/lib/node_modules
 
 # Re-create openclaw symlink (COPY resolves symlinks, breaking ESM imports)
-RUN ln -sf /usr/local/lib/node_modules/openclaw/openclaw.mjs /usr/local/bin/openclaw
+RUN ln -sf /usr/lib/node_modules/openclaw/openclaw.mjs /usr/local/bin/openclaw
 
 # Copy Python site-packages (boto3, requests)
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 
 # Copy V8 compile cache + templates from builder
 COPY --from=builder /app/.compile-cache /app/.compile-cache
-COPY --from=builder /app/docs /app/docs
+COPY --from=builder /app/docs/reference /app/docs/reference
 
 WORKDIR /app
 
