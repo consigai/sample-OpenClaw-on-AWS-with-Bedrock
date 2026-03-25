@@ -124,16 +124,18 @@ def seed(table_name: str, region: str):
 
     # --- Bindings ---
     bindings = [
-        ("bind-01", "emp-z3", "张三", "agent-sa-z3", "SA Agent - 张三", "1:1", "telegram", "active"),
-        ("bind-02", "emp-z3", "张三", "agent-sa-z3", "SA Agent - 张三", "1:1", "slack", "active"),
-        ("bind-03", "emp-l4", "李四", "agent-sa-l4", "SA Agent - 李四", "1:1", "whatsapp", "active"),
-        ("bind-05", "emp-w5", "王五", "agent-sde-w5", "SDE Agent - 王五", "1:1", "slack", "active"),
-        ("bind-08", "emp-sun", "孙浩", "agent-devops-sun", "DevOps Agent - 孙浩", "1:1", "slack", "active"),
-        ("bind-11", "emp-mike", "Mike Johnson", "agent-ae-mike", "Sales Agent - Mike", "1:1", "whatsapp", "active"),
-        ("bind-15", "emp-carol", "Carol Zhang", "agent-fa-carol", "Finance Agent - Carol", "1:1", "slack", "active"),
-        ("bind-20", "emp-z3", "张三", "agent-helpdesk", "IT Help Desk Agent", "N:1", "discord", "active"),
-        ("bind-21", "emp-w5", "王五", "agent-helpdesk", "IT Help Desk Agent", "N:1", "discord", "active"),
-        ("bind-27", "emp-z3", "张三", "agent-sde-w5", "SDE Agent - 王五", "1:N", "slack", "active"),
+        ("bind-01", "emp-z3", "张三", "agent-sa-z3", "SA Agent - 张三", "1:1", "telegram", "bound"),
+        ("bind-02", "emp-z3", "张三", "agent-sa-z3", "SA Agent - 张三", "1:1", "slack", "pending"),
+        ("bind-03", "emp-l4", "李四", "agent-sa-l4", "SA Agent - 李四", "1:1", "whatsapp", "pending"),
+        ("bind-05", "emp-w5", "王五", "agent-sde-w5", "SDE Agent - 王五", "1:1", "slack", "bound"),
+        ("bind-08", "emp-sun", "孙浩", "agent-devops-sun", "DevOps Agent - 孙浩", "1:1", "slack", "expired"),
+        ("bind-11", "emp-mike", "Mike Johnson", "agent-ae-mike", "Sales Agent - Mike", "1:1", "whatsapp", "bound"),
+        ("bind-15", "emp-carol", "Carol Zhang", "agent-fa-carol", "Finance Agent - Carol", "1:1", "slack", "bound"),
+        ("bind-20", "emp-z3", "张三", "agent-helpdesk", "IT Help Desk Agent", "N:1", "discord", "bound"),
+        ("bind-21", "emp-w5", "王五", "agent-helpdesk", "IT Help Desk Agent", "N:1", "discord", "bound"),
+        ("bind-27", "emp-z3", "张三", "agent-sde-w5", "SDE Agent - 王五", "1:N", "slack", "bound"),
+        ("bind-jiade-sa", "emp-jiade", "JiaDe Wang", "agent-sa-jiade", "SA Agent - JiaDe", "1:1", "discord", "bound"),
+        ("bind-peter-exec", "emp-peter", "Peter Wu", "agent-exec-peter", "Executive Agent - Peter", "1:1", "discord", "bound"),
     ]
     for bid, eid, ename, aid, aname, mode, ch, st in bindings:
         items.append({"PK": ORG, "SK": f"BIND#{bid}", "GSI1PK": f"AGENT#{aid}", "GSI1SK": f"BIND#{bid}",

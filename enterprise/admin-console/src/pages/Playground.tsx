@@ -28,28 +28,21 @@ export default function Playground() {
 
   // Build tenant options from real employees + agents
   const tenantOptions = useMemo(() => {
-    const channelShort: Record<string, string> = { whatsapp: 'wa', telegram: 'tg', discord: 'dc', slack: 'sl', feishu: 'fs' };
     const opts = employees
       .filter(e => e.agentId)
-      .map(e => {
-        const agent = agents.find(a => a.id === e.agentId);
-        const ch = e.channels?.[0] || 'slack';
-        const chKey = channelShort[ch] || ch.slice(0, 2);
-        return {
-          label: `${e.name} — ${e.positionName} (${ch})`,
-          value: `${chKey}__${e.id}`,
-        };
-      });
-    // Fallback if no employees loaded yet
+      .map(e => ({
+        label: `${e.name} — ${e.positionName}`,
+        value: `port__${e.id}`,
+      }));
     if (opts.length === 0) {
       return [
-        { label: 'Carol Zhang — Finance Analyst (Slack)', value: 'sl__emp-carol' },
-        { label: 'Wang Wu — SDE (Telegram)', value: 'tg__emp-w5' },
-        { label: 'Zhang San — SA (Discord)', value: 'dc__emp-z3' },
+        { label: 'Carol Zhang — Finance Analyst', value: 'port__emp-carol' },
+        { label: 'Wang Wu — Software Engineer', value: 'port__emp-w5' },
+        { label: 'Zhang San — Solutions Architect', value: 'port__emp-z3' },
       ];
     }
     return opts;
-  }, [employees, agents]);
+  }, [employees]);
 
   const [tenantId, setTenantId] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -68,11 +61,13 @@ export default function Playground() {
   const profile = profiles?.[tenantId] || { role: 'loading', tools: [], planA: '', planE: '' };
   const profileLoaded = !!profiles?.[tenantId];
 
-  // Persist messages
-  useEffect(() => { if (tenantId) saveMessages(tenantId, messages); }, [messages, tenantId]);
+  // Persist messages — but skip when tenant is switching (avoid saving old messages to new key)
+  const [tenantReady, setTenantReady] = useState(false);
+  useEffect(() => { if (tenantId && tenantReady) saveMessages(tenantId, messages); }, [messages]);
 
   useEffect(() => {
     if (!tenantId) return;
+    setTenantReady(false);
     const saved = loadMessages(tenantId);
     if (saved.length > 0) {
       setMessages(saved);
@@ -82,6 +77,8 @@ export default function Playground() {
       setMessages([{ role: 'system', content: `🔒 Tenant context loaded: ${label} — ${p?.role || 'unknown'} role, ${p?.tools?.length || 0} tools`, timestamp: '' }]);
     }
     setLastPlanE('No messages processed yet');
+    // Allow persistence after load completes
+    setTimeout(() => setTenantReady(true), 100);
   }, [tenantId, profiles]);
 
   const handleSend = async () => {

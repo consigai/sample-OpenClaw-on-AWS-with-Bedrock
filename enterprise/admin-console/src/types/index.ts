@@ -75,7 +75,7 @@ export interface Binding {
   agentName: string;
   mode: '1:1' | 'N:1' | '1:N';
   channel: ChannelType;
-  status: 'active' | 'inactive';
+  status: 'bound' | 'pending' | 'expired' | 'revoked' | 'active' | 'inactive';
   createdAt: string;
 }
 
@@ -112,13 +112,15 @@ export interface AuditEntry {
 
 // === Shared ===
 
-export type ChannelType = 'telegram' | 'whatsapp' | 'slack' | 'discord' | 'feishu' | 'dingtalk';
+export type ChannelType = 'telegram' | 'whatsapp' | 'slack' | 'discord' | 'feishu' | 'dingtalk' | 'portal' | 'web';
 
-export const CHANNEL_LABELS: Record<ChannelType, string> = {
+export const CHANNEL_LABELS: Record<string, string> = {
   telegram: 'Telegram',
   whatsapp: 'WhatsApp',
   slack: 'Slack',
   discord: 'Discord',
   feishu: 'Feishu',
   dingtalk: 'DingTalk',
+  portal: 'Web Portal',
+  web: 'Web Portal',
 };

@@ -250,6 +250,50 @@ def _ensure_workspace_assembled(tenant_id: str) -> None:
         except IOError:
             pass
 
+        # 5. Dynamic model config: read from DynamoDB and update openclaw.json
+        # This allows Admin Console to change the model without redeploying the Runtime
+        try:
+            import boto3 as _b3_model
+            ddb = _b3_model.resource("dynamodb", region_name=DYNAMODB_REGION)
+            table = ddb.Table(DYNAMODB_TABLE)
+            config_resp = table.get_item(Key={"PK": "ORG#acme", "SK": "CONFIG#model"})
+            if "Item" in config_resp:
+                model_config = config_resp["Item"]
+                # Check for position-specific override first
+                pos_id = ""
+                try:
+                    ssm_client = _b3_model.client("ssm", region_name=AWS_REGION_RUNTIME)
+                    pos_resp = ssm_client.get_parameter(
+                        Name=f"/openclaw/{STACK_NAME}/tenants/{base_id}/position")
+                    pos_id = pos_resp["Parameter"]["Value"]
+                except Exception:
+                    pass
+
+                overrides = model_config.get("positionOverrides", {})
+                if pos_id and pos_id in overrides:
+                    new_model_id = overrides[pos_id].get("modelId", "")
+                    if new_model_id:
+                        logger.info("Position model override: %s → %s", pos_id, new_model_id)
+                else:
+                    new_model_id = model_config.get("default", {}).get("modelId", "")
+
+                if new_model_id:
+                    # Update openclaw.json with the new model ID
+                    oc_config_path = os.path.expanduser("~/.openclaw/openclaw.json")
+                    if os.path.isfile(oc_config_path):
+                        with open(oc_config_path) as f:
+                            oc_config = json.load(f)
+                        # Update model references
+                        old_model = os.environ.get("BEDROCK_MODEL_ID", "global.amazon.nova-2-lite-v1:0")
+                        oc_json_str = json.dumps(oc_config)
+                        oc_json_str = oc_json_str.replace(old_model, new_model_id)
+                        with open(oc_config_path, "w") as f:
+                            f.write(oc_json_str)
+                        os.environ["BEDROCK_MODEL_ID"] = new_model_id
+                        logger.info("Model updated to %s (from DynamoDB CONFIG#model)", new_model_id)
+        except Exception as e:
+            logger.warning("Dynamic model config failed (non-fatal): %s", e)
+
         _assembled_tenants.add(tenant_id)
         logger.info("Workspace ready for tenant %s", tenant_id)
 

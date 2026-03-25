@@ -68,7 +68,7 @@ export default function Dashboard() {
   const { data: alertRules = [] } = useAlertRules();
 
   const activeAgents = AGENTS.filter(a => a.status === 'active').length;
-  const activeBindings = BINDINGS.filter(b => b.status === 'active').length;
+  const boundBindings = BINDINGS.filter(b => b.status === 'bound' || b.status === 'active').length;
   const unboundEmployees = EMPLOYEES.filter(e => !e.agentId);
   const pendingApprovals = approvalsData?.pending?.length || 0;
   const activeAlerts = alertRules.filter(a => a.status === 'warning').length;
@@ -90,8 +90,8 @@ export default function Dashboard() {
         <StatCard title="Departments" value={topDepts.length} subtitle={`${DEPARTMENTS.length} total`} icon={<Building2 size={22} />} color="primary" trend="up" trendValue="2 new" />
         <StatCard title="Positions" value={POSITIONS.length} subtitle={`${POSITIONS.reduce((s, p) => s + p.memberCount, 0)} members`} icon={<Users size={22} />} color="info" />
         <StatCard title="Employees" value={EMPLOYEES.length} subtitle={`${EMPLOYEES.filter(e => e.agentId).length} with agents`} icon={<Users size={22} />} color="cyan" trend="up" trendValue="+1 this week" />
-        <StatCard title="Active Agents" value={`${activeAgents}/${AGENTS.length}`} subtitle="online / total" icon={<Bot size={22} />} color="success" />
-        <StatCard title="Bindings" value={activeBindings} subtitle={`${Object.keys(channelCounts).length} channels`} icon={<Link2 size={22} />} color="warning" />
+        <StatCard title="Agents" value={`${activeAgents} active / ${AGENTS.length}`} subtitle="idle = serverless standby" icon={<Bot size={22} />} color="success" />
+        <StatCard title="Bindings" value={boundBindings} subtitle={`${Object.keys(channelCounts).length} channels`} icon={<Link2 size={22} />} color="warning" />
         <StatCard title="Live Sessions" value={LIVE_SESSIONS.length} subtitle={`${LIVE_SESSIONS.reduce((s, sess) => s + sess.turns, 0)} turns`} icon={<MessageSquare size={22} />} color="danger" />
       </div>
 

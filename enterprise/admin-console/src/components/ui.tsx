@@ -321,17 +321,24 @@ export function Toggle({ label, checked, onChange, description }: {
 }
 
 // === Status Dot (M3 with pulse animation for active) ===
-export function StatusDot({ status }: { status: 'active' | 'idle' | 'error' | 'archived' | 'inactive' | string }) {
+export function StatusDot({ status }: { status: 'active' | 'idle' | 'error' | 'archived' | 'inactive' | 'pending' | 'disconnected' | 'expired' | 'bound' | 'revoked' | string }) {
   const colorMap: Record<string, string> = {
-    active: 'bg-success', idle: 'bg-warning', error: 'bg-danger', archived: 'bg-text-muted', inactive: 'bg-text-muted',
+    active: 'bg-success', idle: 'bg-text-muted', error: 'bg-danger', archived: 'bg-text-muted',
+    inactive: 'bg-text-muted', pending: 'bg-info', disconnected: 'bg-warning', expired: 'bg-danger',
+    bound: 'bg-success', revoked: 'bg-danger',
+  };
+  const labelMap: Record<string, string> = {
+    active: 'Active', idle: 'Idle', bound: 'Bound', pending: 'Pending', expired: 'Expired',
+    disconnected: 'Disconnected', error: 'Error', revoked: 'Revoked',
   };
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className="relative flex h-2 w-2">
         {status === 'active' && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-40" />}
+        {status === 'pending' && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-info opacity-40" />}
         <span className={clsx('relative inline-flex h-2 w-2 rounded-full', colorMap[status] || 'bg-text-muted')} />
       </span>
-      <span className="text-sm capitalize">{status}</span>
+      <span className="text-sm">{labelMap[status] || status}</span>
     </span>
   );
 }

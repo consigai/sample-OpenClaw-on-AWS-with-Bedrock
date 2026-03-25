@@ -379,7 +379,7 @@ export default function Employees() {
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-1.5">IM Channels</label>
             <div className="flex flex-wrap gap-2">
-              {['slack', 'discord', 'telegram', 'whatsapp', 'feishu'].map(ch => (
+              {['slack', 'discord', 'telegram', 'whatsapp', 'feishu', 'portal'].map(ch => (
                 <button key={ch} onClick={() => setNewChannels(prev => prev.includes(ch) ? prev.filter(c => c !== ch) : [...prev, ch])}
                   className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${newChannels.includes(ch) ? 'bg-primary/10 border-primary/40 text-primary-light' : 'border-dark-border text-text-muted hover:border-text-muted'}`}>
                   {CHANNEL_LABELS[ch as ChannelType]}

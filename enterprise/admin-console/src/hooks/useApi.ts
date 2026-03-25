@@ -307,6 +307,30 @@ export function useUpdateModelConfig() {
   });
 }
 
+export function useSetPositionModel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ posId, ...data }: { posId: string } & Record<string, any>) => api.put(`/settings/model/position/${posId}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['model-config'] }),
+  });
+}
+
+export function useRemovePositionModel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (posId: string) => api.del(`/settings/model/position/${posId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['model-config'] }),
+  });
+}
+
+export function useEnableModel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, any>) => api.put('/settings/model/default', data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['model-config'] }),
+  });
+}
+
 export function useUpdateSecurityConfig() {
   const qc = useQueryClient();
   return useMutation({

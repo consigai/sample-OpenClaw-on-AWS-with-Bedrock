@@ -345,10 +345,55 @@ def _auto_provision_employee(emp: dict) -> dict | None:
 # Agents
 # =========================================================================
 
+def _get_active_agent_ids() -> set:
+    """Determine which agents are currently active (microVM running) from CloudWatch.
+    An agent is 'active' if it had an invocation in the last 15 minutes (AgentCore idle timeout).
+    Returns set of employee IDs that are active."""
+    try:
+        import time as _t
+        cw = _boto3.client("logs", region_name="us-east-1")
+        start_time = int((_t.time() - 900) * 1000)  # 15 min ago
+        active_ids = set()
+        for lg in _LOG_GROUPS:
+            try:
+                resp = cw.filter_log_events(
+                    logGroupName=lg, startTime=start_time,
+                    filterPattern="Invocation tenant_id=",
+                    limit=50, interleaved=True,
+                )
+                for event in resp.get("events", []):
+                    msg = event.get("message", "")
+                    if "tenant_id=" in msg:
+                        tid = msg.split("tenant_id=")[1].split(" ")[0]
+                        # Extract base employee ID
+                        parts = tid.split("__")
+                        if len(parts) >= 3:
+                            active_ids.add(parts[1])
+                        elif len(parts) == 2:
+                            active_ids.add(parts[1])
+                        else:
+                            active_ids.add(tid)
+            except Exception:
+                pass
+        return active_ids
+    except Exception:
+        return set()
+
+
 @app.get("/api/v1/agents")
 def get_agents(authorization: str = Header(default="")):
     user = _get_current_user(authorization)
     agents = db.get_agents()
+
+    # Dynamic status: check CloudWatch for recent activity
+    active_emp_ids = _get_active_agent_ids()
+    for a in agents:
+        emp_id = a.get("employeeId", "")
+        if emp_id in active_emp_ids:
+            a["status"] = "active"
+        elif a.get("status") == "active":
+            a["status"] = "idle"  # No recent activity → idle (serverless standby)
+
     if user and user.role == "manager":
         scope = _get_dept_scope(user)
         if scope is not None:
@@ -362,6 +407,13 @@ def get_agent(agent_id: str):
     agent = db.get_agent(agent_id)
     if not agent:
         raise HTTPException(404, "Agent not found")
+    # Dynamic status
+    active_emp_ids = _get_active_agent_ids()
+    emp_id = agent.get("employeeId", "")
+    if emp_id in active_emp_ids:
+        agent["status"] = "active"
+    elif agent.get("status") == "active":
+        agent["status"] = "idle"
     return agent
 
 @app.post("/api/v1/agents")
@@ -1126,16 +1178,15 @@ def get_playground_profiles():
     emps = db.get_employees()
     positions = db.get_positions()
     pos_map = {p["id"]: p for p in positions}
-    channel_short = {"whatsapp": "wa", "telegram": "tg", "discord": "dc", "slack": "sl", "feishu": "fs", "dingtalk": "dt"}
+    channel_short = {"whatsapp": "wa", "telegram": "tg", "discord": "dc", "slack": "sl", "feishu": "fs", "dingtalk": "dt", "portal": "port"}
     profiles = {}
     for emp in emps:
         if not emp.get("agentId"):
             continue
         pos_id = emp.get("positionId", "")
         pos = pos_map.get(pos_id, {})
-        ch = emp.get("channels", ["slack"])[0] if emp.get("channels") else "slack"
-        ch_key = channel_short.get(ch, ch[:2])
-        tenant_id = f"{ch_key}__{emp['id']}"
+        # Use port__ prefix for all playground profiles (channel-agnostic)
+        tenant_id = f"port__{emp['id']}"
         role = pos.get("name", "unknown").lower().replace(" ", "_")
         tools = _POS_TOOLS.get(pos_id, pos.get("toolAllowlist", ["web_search"]))
         blocked = [t for t in ["shell", "browser", "file_write", "code_execution"] if t not in tools]
@@ -1149,37 +1200,51 @@ def get_playground_profiles():
 @app.post("/api/v1/playground/send")
 def playground_send(body: PlaygroundMessage):
     """Send message to agent. mode=live routes through real Tenant Router → AgentCore."""
-    profile = PLAYGROUND_PROFILES.get(body.tenant_id, PLAYGROUND_PROFILES["wa__intern_sarah"])
+    profiles = get_playground_profiles()
+    profile = profiles.get(body.tenant_id, {"role": "unknown", "tools": ["web_search"], "planA": "Default", "planE": "Default"})
+
+    # Extract employee ID from tenant_id (port__emp-xxx → emp-xxx)
+    emp_id = body.tenant_id.replace("port__", "")
 
     # Live mode: route through Tenant Router → AgentCore → OpenClaw
     if body.mode == "live":
         router_url = os.environ.get("TENANT_ROUTER_URL", "http://localhost:8090")
         try:
             import requests as _req
+            # Use "portal" as channel and bare emp_id as user_id
+            # This matches how Portal Chat sends requests
             r = _req.post(f"{router_url}/route", json={
-                "channel": "playground",
-                "user_id": body.tenant_id,
+                "channel": "portal",
+                "user_id": emp_id,
                 "message": body.message,
             }, timeout=180)
             if r.status_code == 200:
                 data = r.json()
                 agent_response = data.get("response", {})
+                resp_text = agent_response.get("response", str(data)) if isinstance(agent_response, dict) else str(agent_response)
                 return {
-                    "response": agent_response.get("response", str(data)),
+                    "response": resp_text,
                     "tenant_id": data.get("tenant_id", body.tenant_id),
                     "profile": profile,
-                    "plan_a": profile["planA"],
+                    "plan_a": profile.get("planA", ""),
                     "plan_e": "✅ PASS — Real agent response via AgentCore.",
                     "source": "agentcore",
-                    "model": agent_response.get("model", ""),
-                    "usage": agent_response.get("usage", {}),
+                }
+            else:
+                return {
+                    "response": f"⚠️ AgentCore returned {r.status_code}: {r.text[:200]}",
+                    "tenant_id": body.tenant_id,
+                    "profile": profile,
+                    "plan_a": profile.get("planA", ""),
+                    "plan_e": f"⚠️ ERROR — Status {r.status_code}",
+                    "source": "error",
                 }
         except Exception as e:
             return {
                 "response": f"⚠️ AgentCore call failed: {e}\n\nFalling back to simulation.",
                 "tenant_id": body.tenant_id,
                 "profile": profile,
-                "plan_a": profile["planA"],
+                "plan_a": profile.get("planA", ""),
                 "plan_e": "⚠️ ERROR — AgentCore unreachable.",
                 "source": "error",
             }

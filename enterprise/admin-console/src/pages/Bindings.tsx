@@ -83,7 +83,7 @@ export default function Bindings() {
         <StatCard title="Total Bindings" value={BINDINGS.length} icon={<Link2 size={22} />} color="primary" />
         <StatCard title="1:1 Private" value={oneToOne.length} icon={<User size={22} />} color="success" />
         <StatCard title="N:1 Shared" value={shared.length} icon={<Users size={22} />} color="info" />
-        <StatCard title="Active" value={BINDINGS.filter(b => b.status === 'active').length} icon={<Link2 size={22} />} color="cyan" />
+        <StatCard title="Bound" value={BINDINGS.filter(b => b.status === 'bound' || b.status === 'active').length} icon={<Link2 size={22} />} color="cyan" />
       </div>
 
       <Card>
@@ -172,7 +172,7 @@ export default function Bindings() {
               employeeId: selEmp, employeeName: emp?.name || '',
               agentId: selAgent, agentName: agent?.name || '',
               mode: selMode as '1:1' | 'N:1' | '1:N', channel: selChannel as any,
-              status: 'active', createdAt: new Date().toISOString(),
+              status: 'bound', createdAt: new Date().toISOString(),
             });
           }
           setShowCreate(false); setSelEmp(''); setSelAgent(''); setSelChannel('');
