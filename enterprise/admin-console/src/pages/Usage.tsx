@@ -30,17 +30,33 @@ export default function Usage() {
 
   const s = summary || { totalInputTokens: 0, totalOutputTokens: 0, totalCost: 0, totalRequests: 0, tenantCount: 0, chatgptEquivalent: 5 };
 
-  const deptBarOpts: ApexOptions = {
+  const buildDeptBarOpts = (depts: typeof byDept): ApexOptions => ({
     chart: { type: 'bar', toolbar: { show: false }, background: 'transparent', stacked: true },
     colors: ['#6366f1', '#22c55e'],
-    plotOptions: { bar: { borderRadius: 4, columnWidth: '50%', horizontal: true } },
-    grid: { borderColor: '#2e3039', strokeDashArray: 4 },
-    xaxis: { labels: { style: { colors: '#64748b', fontSize: '11px' }, formatter: (v: string) => `${(Number(v) / 1000).toFixed(0)}k` }, axisBorder: { show: false }, axisTicks: { show: false } },
-    yaxis: { labels: { style: { colors: '#94a3b8', fontSize: '12px' } } },
-    tooltip: { theme: 'dark' },
+    plotOptions: { bar: { borderRadius: 3, barHeight: '60%', horizontal: true } },
+    grid: { borderColor: '#2e3039', strokeDashArray: 4, padding: { left: 10 } },
+    xaxis: {
+      categories: depts.map(d => d.department),   // ← department names on y-axis
+      labels: { style: { colors: '#64748b', fontSize: '11px' }, formatter: (v: string) => `${(Number(v) / 1000).toFixed(0)}k` },
+      axisBorder: { show: false }, axisTicks: { show: false },
+    },
+    yaxis: { labels: { style: { colors: '#94a3b8', fontSize: '12px' }, maxWidth: 130 } },
+    tooltip: {
+      theme: 'dark',
+      custom: ({ seriesIndex, dataPointIndex }: { seriesIndex: number; dataPointIndex: number }) => {
+        const d = depts[dataPointIndex];
+        if (!d) return '';
+        return `<div class="p-2 text-xs bg-dark-card border border-dark-border rounded-lg shadow-lg">
+          <p class="font-semibold mb-1">${d.department}</p>
+          <p>Input: ${(d.inputTokens/1000).toFixed(1)}k tokens</p>
+          <p>Output: ${(d.outputTokens/1000).toFixed(1)}k tokens</p>
+          <p class="text-green-400 mt-1">Cost: $${d.cost.toFixed(2)}</p>
+        </div>`;
+      },
+    },
     legend: { position: 'top', horizontalAlign: 'right', labels: { colors: '#94a3b8' } },
     dataLabels: { enabled: false },
-  };
+  });
 
   return (
     <div>
@@ -115,32 +131,52 @@ export default function Usage() {
 
         <div className="mt-4">
           {activeTab === 'department' && (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div>
-                <Chart
-                  options={{...deptBarOpts, yaxis: { labels: { style: { colors: '#94a3b8', fontSize: '12px' } } }}}
-                  series={[
-                    { name: 'Input Tokens', data: byDept.map(d => d.inputTokens) },
-                    { name: 'Output Tokens', data: byDept.map(d => d.outputTokens) },
-                  ]}
-                  type="bar" height={byDept.length * 50 + 60}
-                  categories={byDept.map(d => d.department)}
-                />
-              </div>
-              <Table
-                columns={[
-                  { key: 'dept', label: 'Department', render: (d: typeof byDept[0]) => <span className="font-medium">{d.department}</span> },
-                  { key: 'agents', label: 'Agents', render: (d: typeof byDept[0]) => d.agents },
-                  { key: 'requests', label: 'Requests', render: (d: typeof byDept[0]) => d.requests },
-                  { key: 'tokens', label: 'Tokens', render: (d: typeof byDept[0]) => `${((d.inputTokens + d.outputTokens) / 1000).toFixed(0)}k` },
-                  { key: 'cost', label: 'Cost', render: (d: typeof byDept[0]) => `$${d.cost.toFixed(2)}` },
-                  { key: 'share', label: 'Share', render: (d: typeof byDept[0]) => {
-                    const pct = s.totalCost > 0 ? (d.cost / s.totalCost * 100).toFixed(0) : '0';
-                    return <Badge color="info">{pct}%</Badge>;
-                  }},
+            <div className="space-y-6">
+              {/* Full-width chart — department names now visible on y-axis */}
+              <Chart
+                options={buildDeptBarOpts(byDept)}
+                series={[
+                  { name: 'Input Tokens', data: byDept.map(d => d.inputTokens) },
+                  { name: 'Output Tokens', data: byDept.map(d => d.outputTokens) },
                 ]}
-                data={byDept}
+                type="bar" height={Math.max(byDept.length * 44 + 80, 300)}
               />
+              {/* Table with inline cost share bar — visual without needing the chart */}
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-dark-border text-left">
+                    <th className="pb-2 text-xs font-medium text-text-muted uppercase tracking-wider">Department</th>
+                    <th className="pb-2 text-xs font-medium text-text-muted uppercase tracking-wider text-right">Agents</th>
+                    <th className="pb-2 text-xs font-medium text-text-muted uppercase tracking-wider text-right">Requests</th>
+                    <th className="pb-2 text-xs font-medium text-text-muted uppercase tracking-wider text-right">Tokens</th>
+                    <th className="pb-2 text-xs font-medium text-text-muted uppercase tracking-wider text-right">Cost</th>
+                    <th className="pb-2 text-xs font-medium text-text-muted uppercase tracking-wider w-36">Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {byDept.map((d, i) => {
+                    const pct = s.totalCost > 0 ? (d.cost / s.totalCost * 100) : 0;
+                    const maxCost = byDept[0]?.cost || 1;
+                    return (
+                      <tr key={d.department} className="border-b border-dark-border/40 hover:bg-dark-hover transition-colors">
+                        <td className="py-2.5 font-medium text-text-primary">{d.department}</td>
+                        <td className="py-2.5 text-right text-text-secondary">{d.agents}</td>
+                        <td className="py-2.5 text-right text-text-secondary">{d.requests}</td>
+                        <td className="py-2.5 text-right text-text-secondary">{((d.inputTokens + d.outputTokens) / 1000).toFixed(0)}k</td>
+                        <td className="py-2.5 text-right font-medium text-text-primary">${d.cost.toFixed(2)}</td>
+                        <td className="py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 rounded-full bg-dark-bg overflow-hidden">
+                              <div className="h-full rounded-full bg-primary/70" style={{ width: `${(d.cost / maxCost) * 100}%` }} />
+                            </div>
+                            <span className="text-xs text-text-muted w-8 text-right">{pct.toFixed(0)}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
 
