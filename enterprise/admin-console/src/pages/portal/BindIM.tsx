@@ -136,17 +136,46 @@ function ChannelWizard({ channel, onDone, onCancel }: { channel: Channel; onDone
           </a>
         </div>
       ) : (
-        <div className="rounded-xl bg-dark-bg p-4 text-center">
-          <p className="text-xs text-text-muted mb-2">Send this command to @{session.botUsername}</p>
-          <code className="text-sm font-mono text-primary-light bg-primary/10 px-3 py-2 rounded-lg block">
-            /start {session.token}
-          </code>
+        <div className="space-y-3">
+          {/* Step-by-step instructions per channel */}
+          <div className="rounded-xl bg-dark-bg border border-dark-border/50 p-4 space-y-3">
+            {channel.id === 'feishu' && (
+              <ol className="space-y-2 text-xs text-text-secondary">
+                <li className="flex gap-2"><span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold flex items-center justify-center">1</span><span>Open <strong className="text-text-primary">Feishu</strong> (飞书) on your phone or desktop</span></li>
+                <li className="flex gap-2"><span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold flex items-center justify-center">2</span><span>Tap the search icon 🔍, search for <strong className="text-text-primary">ACME Agent</strong></span></li>
+                <li className="flex gap-2"><span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold flex items-center justify-center">3</span><span>Open the bot chat and <strong className="text-text-primary">send this exact command:</strong></span></li>
+              </ol>
+            )}
+            {channel.id === 'discord' && (
+              <ol className="space-y-2 text-xs text-text-secondary">
+                <li className="flex gap-2"><span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold flex items-center justify-center">1</span><span>Open <strong className="text-text-primary">Discord</strong> and go to the ACME Corp server</span></li>
+                <li className="flex gap-2"><span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold flex items-center justify-center">2</span><span>Find <strong className="text-text-primary">ACME Agent</strong> in the Members list and open a DM</span></li>
+                <li className="flex gap-2"><span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold flex items-center justify-center">3</span><span><strong className="text-text-primary">Send this command</strong> in the DM:</span></li>
+              </ol>
+            )}
+            {!['feishu','discord'].includes(channel.id) && (
+              <p className="text-xs text-text-muted">Open {channel.label}, find <strong className="text-text-primary">@{session.botUsername || 'ACME Agent'}</strong>, and send:</p>
+            )}
+            <div className="flex items-center gap-2 mt-2">
+              <code className="flex-1 text-sm font-mono text-primary-light bg-primary/10 px-3 py-2.5 rounded-lg block text-center">
+                /start {session.token}
+              </code>
+              <button onClick={() => navigator.clipboard?.writeText(`/start ${session.token}`)}
+                className="flex-shrink-0 px-2.5 py-2.5 rounded-lg bg-dark-hover text-text-muted hover:text-text-primary text-[10px] border border-dark-border/40 transition-colors">
+                Copy
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       <div className="rounded-lg bg-info/5 border border-info/20 px-3 py-2.5 flex items-start gap-2">
         <Loader2 size={14} className="animate-spin text-info mt-0.5 flex-shrink-0" />
-        <p className="text-xs text-info">Waiting for you to connect… tap Start in {channel.label} to complete.</p>
+        <p className="text-xs text-info">
+          {channel.id === 'feishu' ? 'Waiting… After sending the command in Feishu, this page will update automatically.' :
+           channel.id === 'discord' ? 'Waiting… After sending the command in Discord DM, this page will update automatically.' :
+           `Waiting for you to connect… tap Start in ${channel.label} to complete.`}
+        </p>
       </div>
 
       <Button variant="ghost" className="w-full text-xs" onClick={onCancel}>Cancel</Button>

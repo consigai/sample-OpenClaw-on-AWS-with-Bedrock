@@ -1571,8 +1571,15 @@ _CHANNEL_BOT_INFO = {
     },
     "discord": {
         "botUsername": "ACME Agent",
-        "deepLinkTemplate": None,  # Discord uses pairing code entry
+        "deepLinkTemplate": None,
         "label": "Discord",
+        "instructions": "Open Discord → ACME Corp server → DM ACME Agent → send the command",
+    },
+    "feishu": {
+        "botUsername": os.environ.get("FEISHU_BOT_NAME", "ACME Agent"),
+        "deepLinkTemplate": None,
+        "label": "Feishu / Lark",
+        "instructions": "Open Feishu → Search 'ACME Agent' → Open bot chat → send the command",
     },
     "slack": {
         "botUsername": os.environ.get("SLACK_BOT_USERNAME", "acme-agent"),
