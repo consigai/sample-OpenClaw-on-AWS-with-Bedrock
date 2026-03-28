@@ -491,6 +491,29 @@ aws ssm put-parameter --name "/openclaw/${STACK_NAME}/jwt-secret" \
   --value "$(openssl rand -hex 32)" --type SecureString --overwrite --region $REGION
 ```
 
+### Step 4.5: Allow ECS Tasks to Reach SSM VPC Endpoint
+
+If your stack has SSM VPC endpoints (created when `CreateVPCEndpoints=true`), the always-on ECS Fargate tasks need permission to reach them. This is a one-time manual step because the SSM endpoint security group is not managed by this stack's CloudFormation template.
+
+```bash
+# Get the SSM endpoint security group
+SSM_ENDPOINT_SG=$(aws ec2 describe-vpc-endpoints --region $REGION \
+  --filters "Name=service-name,Values=com.amazonaws.${REGION}.ssm" \
+  --query 'VpcEndpoints[0].Groups[0].GroupId' --output text)
+
+ECS_TASK_SG=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --region $REGION \
+  --query 'Stacks[0].Outputs[?OutputKey==`AlwaysOnTaskSecurityGroupId`].OutputValue' --output text)
+
+# Allow HTTPS from ECS tasks to SSM endpoint
+aws ec2 authorize-security-group-ingress \
+  --group-id $SSM_ENDPOINT_SG \
+  --protocol tcp --port 443 \
+  --source-group $ECS_TASK_SG \
+  --region $REGION
+```
+
+> Skip this step if you deployed with `CreateVPCEndpoints=false` (ECS tasks reach SSM over the internet directly).
+
 ### Step 5: Deploy and Start Gateway Services
 
 ```bash
