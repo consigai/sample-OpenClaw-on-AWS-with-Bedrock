@@ -481,6 +481,8 @@ class TenantRouterHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/route":
             self._handle_route()
+        elif self.path == "/stop-session":
+            self._handle_stop_session()
         else:
             self._respond(404, {"error": "not found"})
 
@@ -545,6 +547,63 @@ class TenantRouterHandler(BaseHTTPRequestHandler):
             })
         except RuntimeError as e:
             self._respond(502, {"error": str(e), "tenant_id": tenant_id})
+
+    def _handle_stop_session(self):
+        """Stop an AgentCore session to force workspace refresh on next invoke.
+        Used by Admin Console after config changes (USER.md, permissions, model override).
+        POST /stop-session { "emp_id": "emp-carol" }
+        """
+        body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            self._respond(400, {"error": "invalid json"})
+            return
+
+        emp_id = payload.get("emp_id", "")
+        if not emp_id:
+            self._respond(400, {"error": "emp_id required"})
+            return
+
+        stopped = []
+        errors = []
+
+        # Stop all session types for this employee (emp, twin, pgnd)
+        for channel in ["emp", "twin", "playground"]:
+            try:
+                session_id = derive_tenant_id(channel, emp_id)
+                # Resolve the runtime for this employee
+                effective_runtime = _get_runtime_id_for_tenant(emp_id) or RUNTIME_ID
+                if not effective_runtime:
+                    continue
+
+                try:
+                    import boto3 as _b3stop
+                    sts = _b3stop.client("sts", region_name=AWS_REGION)
+                    account_id = sts.get_caller_identity()["Account"]
+                    runtime_arn = f"arn:aws:bedrock-agentcore:{AWS_REGION}:{account_id}:runtime/{effective_runtime}"
+
+                    client = _agentcore_client()
+                    client.stop_runtime_session(
+                        agentRuntimeArn=runtime_arn,
+                        runtimeSessionId=session_id,
+                    )
+                    stopped.append(session_id)
+                    logger.info("Stopped session %s for %s", session_id, emp_id)
+                except Exception as e:
+                    # Session may not exist — that's fine
+                    err_code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
+                    if err_code not in ("ResourceNotFoundException", "ValidationException"):
+                        errors.append(f"{channel}: {e}")
+                    logger.debug("Stop session %s: %s", session_id, e)
+            except Exception as e:
+                errors.append(f"{channel}: {e}")
+
+        self._respond(200, {
+            "emp_id": emp_id,
+            "stopped": stopped,
+            "errors": errors,
+        })
 
     def _respond(self, status: int, body: dict):
         data = json.dumps(body, default=str).encode()

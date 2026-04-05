@@ -735,6 +735,32 @@ def _ensure_workspace_assembled(tenant_id: str) -> None:
             except Exception as e:
                 logger.warning("Gateway workspace mirror failed (non-fatal): %s", e)
 
+        # Write SOUL hash + config version to DynamoDB SESSION# for admin monitoring.
+        # Admin Console can display this to verify the agent is running the correct config.
+        try:
+            import hashlib as _hl
+            soul_path = os.path.join(WORKSPACE, "SOUL.md")
+            soul_hash = ""
+            if os.path.isfile(soul_path):
+                with open(soul_path, "rb") as f:
+                    soul_hash = _hl.sha256(f.read()).hexdigest()[:16]
+            import boto3 as _b3sh
+            from datetime import datetime, timezone
+            ddb_sh = _b3sh.resource("dynamodb", region_name=DYNAMODB_REGION)
+            session_key = tenant_id[:40]
+            ddb_sh.Table(DYNAMODB_TABLE).update_item(
+                Key={"PK": "ORG#acme", "SK": f"SESSION#{session_key}"},
+                UpdateExpression="SET soulHash = :h, configVersion = :v, assembledAt = :t",
+                ExpressionAttributeValues={
+                    ":h": soul_hash,
+                    ":v": _config_version or "initial",
+                    ":t": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            logger.info("SOUL hash written to DynamoDB: %s config=%s", soul_hash, _config_version)
+        except Exception as e:
+            logger.warning("SOUL hash write failed (non-fatal): %s", e)
+
         _assembled_tenants.add(tenant_id)
         logger.info("Workspace ready for tenant %s", tenant_id)
 

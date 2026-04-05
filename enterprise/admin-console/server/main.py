@@ -103,6 +103,20 @@ def _bump_config_version() -> None:
     except Exception as e:
         print(f"[config-version] bump failed (non-fatal): {e}")
 
+def _stop_employee_session(emp_id: str) -> dict:
+    """Call Tenant Router /stop-session to force agent workspace refresh.
+    Used after USER.md edits, permission changes, or admin Force Refresh."""
+    router_url = os.environ.get("TENANT_ROUTER_URL", "http://localhost:8090")
+    try:
+        import requests as _req_stop
+        r = _req_stop.post(f"{router_url}/stop-session",
+                          json={"emp_id": emp_id}, timeout=30)
+        return r.json() if r.status_code == 200 else {"error": r.text}
+    except Exception as e:
+        print(f"[stop-session] Failed for {emp_id}: {e}")
+        return {"error": str(e)}
+
+
 # Server start time — used to compute uptime for /settings/services
 _SERVER_START_TIME = time.time()
 
@@ -881,6 +895,16 @@ def save_workspace_file(body: FileWriteRequest, authorization: str = Header(defa
     success = s3ops.write_file(body.key, body.content)
     if not success:
         raise HTTPException(500, "Failed to write file")
+
+    # Auto-trigger session refresh when employee personal files change.
+    # This ensures USER.md edits take effect immediately (not waiting for config_version poll).
+    if "/workspace/USER.md" in body.key or "/workspace/SOUL.md" in body.key:
+        import re as _re_ws
+        m = _re_ws.match(r"(emp-[^/]+)/workspace/", body.key)
+        if m:
+            import threading
+            threading.Thread(target=_stop_employee_session, args=(m.group(1),), daemon=True).start()
+
     return {"key": body.key, "saved": True, "size": len(body.content)}
 
 @app.get("/api/v1/workspace/file/versions")
@@ -6174,6 +6198,33 @@ def unassign_always_on_from_employee(agent_id: str, emp_id: str, authorization: 
     except Exception:
         pass
     return {"unassigned": True, "empId": emp_id}
+
+
+# =========================================================================
+# Agent Refresh — force workspace reload via StopRuntimeSession
+# =========================================================================
+
+@app.post("/api/v1/agents/{emp_id}/refresh")
+def refresh_agent(emp_id: str, authorization: str = Header(default="")):
+    """Force an agent to reload its workspace on next invocation.
+    Calls StopRuntimeSession for all session types (emp, twin, pgnd).
+    Used after config changes that need immediate propagation."""
+    _require_role(authorization, roles=["admin", "manager"])
+    result = _stop_employee_session(emp_id)
+    # Audit trail
+    user = _require_auth(authorization)
+    db.create_audit_entry({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "eventType": "agent_refresh",
+        "actorId": user.employee_id,
+        "actorName": user.name,
+        "targetType": "agent",
+        "targetId": emp_id,
+        "detail": f"Agent refresh triggered for {emp_id} by {user.name}",
+        "status": "success",
+    })
+    return {"refreshed": True, "empId": emp_id, "result": result,
+            "note": "Agent will reload workspace on next message."}
 
 
 # =========================================================================
