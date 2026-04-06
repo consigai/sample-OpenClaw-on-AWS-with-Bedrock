@@ -467,15 +467,24 @@ Zero IT friction. Employees self-service in 30 seconds. Admins see all connectio
 
 ## Quick Start
 
+> **TL;DR** — Three commands to deploy:
+> ```bash
+> cd enterprise
+> cp .env.example .env        # edit: STACK_NAME, REGION, ADMIN_PASSWORD
+> bash deploy.sh              # ~15 min — infra + Docker build + seed
+> ```
+> Then follow **Step 4–6** below to deploy the Admin Console and Gateway services on EC2.
+
 ### Prerequisites
 
 | Requirement | Version | Notes |
 |-------------|---------|-------|
 | AWS CLI | v2.27+ | `bedrock-agentcore-control` requires 2.27+ |
-| Docker | Any | `--platform linux/arm64` support needed |
 | Node.js | 18+ | For Admin Console frontend build |
 | Python | 3.10+ | For seed scripts and backend |
 | SSM Plugin | Latest | [Install guide](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) |
+
+> **No local Docker required** — the agent container image is built on the gateway EC2 (ARM64 Graviton) via SSM.
 
 **AWS requirements:**
 - Bedrock model access: Nova 2 Lite (default) + Anthropic Claude (exec tier + Admin Assistant)
