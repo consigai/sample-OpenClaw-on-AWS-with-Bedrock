@@ -259,16 +259,20 @@ def get_gateway_dashboard(authorization: str = Header(default="")):
             # Build direct URL (EC2 public IP:8098) for WebSocket support
             # CloudFront doesn't reliably proxy WebSocket, so Gateway Console
             # connects directly to EC2's nginx which proxies to container:18789
-            import boto3 as _b3_gwd
             direct_url = None
             try:
-                instance_id = os.environ.get("GATEWAY_INSTANCE_ID", "")
-                if instance_id:
-                    ec2 = _b3_gwd.client("ec2", region_name=os.environ.get("GATEWAY_REGION", "us-east-1"))
-                    info = ec2.describe_instances(InstanceIds=[instance_id])
-                    public_ip = info["Reservations"][0]["Instances"][0].get("PublicIpAddress", "")
-                    if public_ip:
-                        direct_url = f"http://{public_ip}:8098/"
+                import urllib.request
+                # IMDSv2: get public IP of this EC2 instance
+                tok_req = urllib.request.Request(
+                    "http://169.254.169.254/latest/api/token",
+                    method="PUT", headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"})
+                imds_token = urllib.request.urlopen(tok_req, timeout=2).read().decode()
+                ip_req = urllib.request.Request(
+                    "http://169.254.169.254/latest/meta-data/public-ipv4",
+                    headers={"X-aws-ec2-metadata-token": imds_token})
+                public_ip = urllib.request.urlopen(ip_req, timeout=2).read().decode().strip()
+                if public_ip:
+                    direct_url = f"http://{public_ip}:8098/"
             except Exception:
                 pass
             return {
