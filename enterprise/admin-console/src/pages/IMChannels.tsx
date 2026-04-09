@@ -268,14 +268,18 @@ function ChannelConnections({ channel, connections, channelStatus, onRevoke }: {
         <div className="rounded-xl border border-warning/20 bg-warning/5 px-4 py-3 text-sm">
           <p className="font-medium text-text-primary mb-1">Bot not configured</p>
           <p className="text-xs text-text-muted mb-2">
-            Configure the {label} bot via the <strong>OpenClaw Gateway UI</strong> (one-time setup by IT Admin):
+            Configure the {label} bot on the gateway EC2 (one-time setup by IT Admin):
           </p>
-          <ol className="text-xs text-text-muted space-y-0.5 list-decimal list-inside">
-            <li>SSM port-forward: <code className="bg-dark-hover px-1 rounded">aws ssm start-session --target $INSTANCE_ID --document-name AWS-StartPortForwardingSession --parameters portNumber=18789,localPortNumber=18789</code></li>
-            <li>Open <code className="bg-dark-hover px-1 rounded">http://localhost:18789</code> → Channels → Add {label}</li>
-            <li>Paste your bot token / credentials → Save</li>
+          <ol className="text-xs text-text-muted space-y-1 list-decimal list-inside">
+            <li>SSM into EC2: <code className="bg-dark-hover px-1 rounded">aws ssm start-session --target $INSTANCE_ID --region $REGION</code></li>
+            <li>Switch user: <code className="bg-dark-hover px-1 rounded">sudo su - ubuntu</code></li>
+            <li>Add channel: <code className="bg-dark-hover px-1 rounded">openclaw channels add {channel} --token YOUR_BOT_TOKEN</code></li>
+            <li>Verify: <code className="bg-dark-hover px-1 rounded">openclaw channels list</code></li>
             <li>Come back here and click <strong>Refresh</strong> to confirm status</li>
           </ol>
+          <p className="text-xs text-text-muted mt-2">
+            Channel setup guide: <a href="https://docs.openclaw.ai/channels" target="_blank" rel="noreferrer" className="text-primary-light hover:underline">docs.openclaw.ai/channels</a>
+          </p>
         </div>
       )}
 
@@ -408,21 +412,23 @@ export default function IMChannels() {
             <div className="rounded-lg bg-dark-bg border border-dark-border/50 px-3 py-2.5">
               <div className="flex items-center gap-2 mb-1">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-bold">1</span>
-                <p className="text-sm font-medium text-text-primary">Open Gateway UI</p>
+                <p className="text-sm font-medium text-text-primary">SSM into EC2</p>
               </div>
               <p className="text-xs text-text-muted">
-                Port-forward to <code className="bg-dark-hover px-1 rounded">localhost:18789</code> via SSM, then open in browser.
-                Use the gateway token from SSM Parameter Store.
+                Connect to the gateway EC2 via SSM Session Manager:
+                <code className="bg-dark-hover px-1 rounded block mt-1">aws ssm start-session --target $INSTANCE_ID</code>
+                Then switch to ubuntu user: <code className="bg-dark-hover px-1 rounded">sudo su - ubuntu</code>
               </p>
             </div>
             <div className="rounded-lg bg-dark-bg border border-dark-border/50 px-3 py-2.5">
               <div className="flex items-center gap-2 mb-1">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-bold">2</span>
-                <p className="text-sm font-medium text-text-primary">Add Bot Tokens</p>
+                <p className="text-sm font-medium text-text-primary">Add IM Channel</p>
               </div>
               <p className="text-xs text-text-muted">
-                In Gateway UI → <strong>Channels</strong> → select a platform (e.g. Telegram) → paste your bot token → Save.
-                Repeat for each platform you want.
+                Use the OpenClaw CLI to add a channel:
+                <code className="bg-dark-hover px-1 rounded block mt-1">openclaw channels add telegram --token YOUR_BOT_TOKEN</code>
+                Repeat for each platform. Run <code className="bg-dark-hover px-1 rounded">openclaw channels list</code> to verify.
               </p>
             </div>
             <div className="rounded-lg bg-dark-bg border border-dark-border/50 px-3 py-2.5">
@@ -438,6 +444,7 @@ export default function IMChannels() {
           </div>
           <p className="text-xs text-text-muted mt-3">
             After configuring, click <strong>Refresh</strong> above to see the updated bot status.
+            Full channel docs: <a href="https://docs.openclaw.ai/channels" target="_blank" rel="noreferrer" className="text-primary-light hover:underline">docs.openclaw.ai/channels</a>
           </p>
         </div>
       )}

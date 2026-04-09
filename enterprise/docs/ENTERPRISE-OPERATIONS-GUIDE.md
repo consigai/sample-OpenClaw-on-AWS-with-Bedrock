@@ -202,43 +202,56 @@ Go to **Skill Market** (sidebar):
 
 ### 4.5 Set Up IM Bots
 
-This connects the platform to Telegram, Discord, Slack, etc. so employees can chat with their agents via IM. There are two ways to configure IM channels:
+This connects the platform to Telegram, Discord, Slack, etc. so employees can chat with their agents via IM.
 
-#### Option A: Gateway Web UI (recommended for first-time setup)
-
-```bash
-# From your local machine — port-forward to Gateway UI:
-aws ssm start-session --target <INSTANCE_ID> --region <REGION> \
-  --document-name AWS-StartPortForwardingSession \
-  --parameters '{"portNumber":["18789"],"localPortNumber":["18789"]}'
-```
-
-Get the gateway token:
-```bash
-aws ssm get-parameter \
-  --name "/openclaw/<STACK_NAME>/gateway-token" \
-  --with-decryption --query Parameter.Value --output text --region <REGION>
-```
-
-Open browser: `http://localhost:18789/?token=<TOKEN>`
-
-Go to **Channels** → select platform → follow the setup wizard. The Web UI provides a guided flow for each platform with credential validation.
-
-#### Option B: CLI on EC2 (for experienced users)
-
-SSM directly into the EC2 and use the OpenClaw CLI:
+#### Step 1: SSM into the gateway EC2
 
 ```bash
 aws ssm start-session --target <INSTANCE_ID> --region <REGION>
 sudo su - ubuntu
+```
 
-# Interactive TUI — navigate to Channels to add/configure bots
-openclaw tui
+#### Step 2: Add IM channels using OpenClaw CLI
 
-# Or use openclaw CLI commands directly
-openclaw channels list                    # View configured channels
-openclaw channels add telegram            # Interactive setup for Telegram
-openclaw channels add discord             # Interactive setup for Discord
+```bash
+# Telegram — get token from @BotFather
+openclaw channels add telegram --token "YOUR_TELEGRAM_BOT_TOKEN"
+
+# Discord — get token from discord.com/developers → Bot tab
+openclaw channels add discord --token "YOUR_DISCORD_BOT_TOKEN"
+
+# Slack — get token from api.slack.com/apps → Bot User OAuth Token
+openclaw channels add slack --bot-token "xoxb-YOUR_TOKEN" --app-token "xapp-YOUR_TOKEN"
+
+# Feishu / Lark — get App ID + Secret from Feishu Admin Console
+openclaw channels add feishu --app-id "YOUR_APP_ID" --app-secret "YOUR_APP_SECRET"
+
+# Verify all channels
+openclaw channels list
+```
+
+Each platform has its own token/credential format. Full channel setup docs: https://docs.openclaw.ai/channels
+
+#### Step 3: Verify in Admin Console
+
+Go back to **Admin Console → IM Channels → Refresh**. Configured channels should show "Bot Active" status.
+
+#### Alternative: Gateway Web UI
+
+If you prefer a browser-based setup wizard:
+
+```bash
+# Port-forward to Gateway UI (from your local machine):
+aws ssm start-session --target <INSTANCE_ID> --region <REGION> \
+  --document-name AWS-StartPortForwardingSession \
+  --parameters '{"portNumber":["18789"],"localPortNumber":["18789"]}'
+
+# Get gateway token:
+aws ssm get-parameter \
+  --name "/openclaw/<STACK_NAME>/gateway-token" \
+  --with-decryption --query Parameter.Value --output text --region <REGION>
+
+# Open: http://localhost:18789/?token=<TOKEN> → Channels → Add
 ```
 
 The CLI provides the same configuration options as the Web UI. Use whichever you prefer.
