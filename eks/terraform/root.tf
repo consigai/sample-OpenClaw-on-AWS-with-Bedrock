@@ -80,6 +80,8 @@ module "operator" {
 
   cluster_name       = module.eks_cluster.cluster_name
   operator_namespace = local.operator_namespace
+  chart_repository   = local.chart_repository
+  ecr_host           = local.is_china_region ? local.ecr_host : ""
   is_china_region    = local.is_china_region
 
   tags = local.tags
@@ -106,8 +108,10 @@ module "kata" {
   node_iam_role_name  = module.eks_cluster.node_iam_role_name
   vpc_cidr            = var.vpc_cidr
 
-  is_china_region = local.is_china_region
-  partition       = local.partition
+  chart_repository = local.chart_repository
+  ecr_host         = local.is_china_region ? local.ecr_host : ""
+  is_china_region  = local.is_china_region
+  partition        = local.partition
 
   tags = local.tags
 
@@ -130,8 +134,9 @@ module "networking" {
 
   enable_cloudfront = var.enable_cloudfront
 
-  is_china_region = local.is_china_region
-  partition       = local.partition
+  chart_repository = local.chart_repository
+  is_china_region  = local.is_china_region
+  partition        = local.partition
 
   tags = local.tags
 
@@ -146,7 +151,9 @@ module "monitoring" {
   count  = var.enable_monitoring ? 1 : 0
   source = "./modules/monitoring"
 
-  cluster_name = module.eks_cluster.cluster_name
+  cluster_name     = module.eks_cluster.cluster_name
+  chart_repository = local.chart_repository
+  ecr_host         = local.is_china_region ? local.ecr_host : ""
 
   tags = local.tags
 
@@ -165,8 +172,10 @@ module "litellm" {
   cluster_oidc_issuer = module.eks_cluster.oidc_issuer
   oidc_provider_arn   = module.eks_cluster.oidc_provider_arn
 
-  is_china_region = local.is_china_region
-  partition       = local.partition
+  chart_repository = local.chart_repository
+  ecr_host         = local.is_china_region ? local.ecr_host : ""
+  is_china_region  = local.is_china_region
+  partition        = local.partition
 
   tags = local.tags
 

@@ -73,20 +73,21 @@ bash eks/scripts/build-and-mirror.sh \
   --profile china
 ```
 
-This builds the admin console image and mirrors all 10 operator images to China ECR:
+This builds the admin console image, mirrors all 11 operator container images and Helm chart OCI artifacts to China ECR:
 
 | Image | Purpose |
 |-------|---------|
-| `ghcr.io/openclaw/openclaw:latest` | OpenClaw main container |
+| `ghcr.io/openclaw/openclaw:latest` | OpenClaw main container + init containers |
 | `ghcr.io/astral-sh/uv:0.6-bookworm-slim` | Python deps init container |
+| `busybox:1.37` | Config copy init container (overwrite mode) |
 | `nginx:1.27-alpine` | Gateway proxy sidecar |
 | `otel/opentelemetry-collector:0.120.0` | Observability sidecar |
 | `chromedp/headless-shell:stable` | Browser automation sidecar |
 | `ghcr.io/tailscale/tailscale:latest` | Tailscale VPN sidecar |
 | `ollama/ollama:latest` | Local LLM inference sidecar |
 | `tsl0922/ttyd:latest` | Web terminal sidecar |
-| `rclone/rclone:latest` | S3 backup job |
-| `ghcr.io/openclaw-rocks/openclaw-operator:v0.25.2` | Operator itself |
+| `rclone/rclone:1.68` | S3 backup/restore job |
+| `ghcr.io/openclaw-rocks/openclaw-operator:v0.26.2` | Operator itself |
 
 ---
 
@@ -668,11 +669,11 @@ docker pull --platform $PLATFORM ghcr.io/openclaw/openclaw:latest
 docker pull --platform $PLATFORM ghcr.io/astral-sh/uv:0.6-bookworm-slim
 docker pull --platform $PLATFORM nginx:1.27-alpine
 docker pull --platform $PLATFORM otel/opentelemetry-collector:0.120.0
-docker pull --platform $PLATFORM ghcr.io/openclaw-rocks/openclaw-operator:v0.25.2
+docker pull --platform $PLATFORM ghcr.io/openclaw-rocks/openclaw-operator:v0.26.2
 
 # Optional sidecar images
 docker pull --platform $PLATFORM chromedp/headless-shell:stable   # Browser sandbox
-docker pull --platform $PLATFORM rclone/rclone:latest              # Backup
+docker pull --platform $PLATFORM rclone/rclone:1.68              # Backup
 docker pull --platform $PLATFORM tsl0922/ttyd:latest               # Web terminal
 docker pull --platform $PLATFORM ghcr.io/tailscale/tailscale:latest  # VPN
 
@@ -682,12 +683,12 @@ docker save \
   ghcr.io/astral-sh/uv:0.6-bookworm-slim \
   nginx:1.27-alpine \
   otel/opentelemetry-collector:0.120.0 \
-  ghcr.io/openclaw-rocks/openclaw-operator:v0.25.2 \
+  ghcr.io/openclaw-rocks/openclaw-operator:v0.26.2 \
   | gzip > core-images.tar.gz
 
 docker save \
   chromedp/headless-shell:stable \
-  rclone/rclone:latest \
+  rclone/rclone:1.68 \
   tsl0922/ttyd:latest \
   ghcr.io/tailscale/tailscale:latest \
   | gzip > sidecar-images.tar.gz
@@ -768,23 +769,23 @@ docker tag ghcr.io/openclaw/openclaw:latest $ECR/openclaw/openclaw:latest
 docker tag ghcr.io/astral-sh/uv:0.6-bookworm-slim $ECR/astral-sh/uv:0.6-bookworm-slim
 docker tag nginx:1.27-alpine $ECR/library/nginx:1.27-alpine
 docker tag otel/opentelemetry-collector:0.120.0 $ECR/otel/opentelemetry-collector:0.120.0
-docker tag ghcr.io/openclaw-rocks/openclaw-operator:v0.25.2 $ECR/openclaw-rocks/openclaw-operator:v0.25.2
+docker tag ghcr.io/openclaw-rocks/openclaw-operator:v0.26.2 $ECR/openclaw-rocks/openclaw-operator:v0.26.2
 docker tag openclaw-admin-console:latest $ECR/${NAME}/admin-console:latest
 
 for img in openclaw/openclaw:latest astral-sh/uv:0.6-bookworm-slim \
            library/nginx:1.27-alpine otel/opentelemetry-collector:0.120.0 \
-           openclaw-rocks/openclaw-operator:v0.25.2 ${NAME}/admin-console:latest; do
+           openclaw-rocks/openclaw-operator:v0.26.2 ${NAME}/admin-console:latest; do
   echo "Pushing $img..."
   docker push $ECR/$img
 done
 
 # Push optional sidecar images
 docker tag chromedp/headless-shell:stable $ECR/chromedp/headless-shell:stable
-docker tag rclone/rclone:latest $ECR/rclone/rclone:latest
+docker tag rclone/rclone:1.68 $ECR/rclone/rclone:1.68
 docker tag tsl0922/ttyd:latest $ECR/tsl0922/ttyd:latest
 docker tag ghcr.io/tailscale/tailscale:latest $ECR/tailscale/tailscale:latest
 
-for img in chromedp/headless-shell:stable rclone/rclone:latest \
+for img in chromedp/headless-shell:stable rclone/rclone:1.68 \
            tsl0922/ttyd:latest tailscale/tailscale:latest; do
   docker push $ECR/$img
 done

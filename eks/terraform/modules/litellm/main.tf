@@ -110,9 +110,10 @@ resource "aws_eks_pod_identity_association" "litellm" {
 ################################################################################
 
 resource "helm_release" "litellm" {
-  name      = "litellm"
-  chart     = "oci://ghcr.io/berriai/litellm-helm"
-  namespace = kubernetes_namespace_v1.litellm.metadata[0].name
+  name       = "litellm"
+  repository = var.chart_repository != "" ? var.chart_repository : "oci://ghcr.io/berriai"
+  chart      = "litellm-helm"
+  namespace  = kubernetes_namespace_v1.litellm.metadata[0].name
 
   timeout = 600
 
@@ -127,15 +128,15 @@ resource "helm_release" "litellm" {
     value = kubernetes_service_account_v1.litellm.metadata[0].name
   }
 
-  # Container image
+  # Container image — upstream: docker.litellm.ai/berriai/litellm
   set {
     name  = "image.tag"
-    value = "litellm-main-latest"
+    value = "main-latest"
   }
 
   set {
     name  = "image.repository"
-    value = "public.ecr.aws/t6v6o5d5/kube-prometheus"
+    value = var.ecr_host != "" ? "${var.ecr_host}/berriai/litellm" : "docker.litellm.ai/berriai/litellm"
   }
 
   # ------------------------------------------------------------------

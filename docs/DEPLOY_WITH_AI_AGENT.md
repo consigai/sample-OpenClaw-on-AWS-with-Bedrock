@@ -158,23 +158,24 @@ bash eks/scripts/build-and-mirror.sh \
 
 ### Expected output (China -- mirror section)
 
-For China deployments, the mirror section should show all 10 images:
+For China deployments, the mirror section should show all 11 images:
 
 ```
-[info]  Mirroring 10 images to ECR (ACCOUNT.dkr.ecr.cn-northwest-1.amazonaws.com.cn)...
+[info]  Mirroring 11 images to ECR (ACCOUNT.dkr.ecr.cn-northwest-1.amazonaws.com.cn)...
 
   ghcr.io/openclaw/openclaw:latest                        → PUSHED
   ghcr.io/astral-sh/uv:0.6-bookworm-slim                 → PUSHED
+  busybox:1.37                                             → PUSHED
   nginx:1.27-alpine                                        → PUSHED
   otel/opentelemetry-collector:0.120.0                     → PUSHED
   chromedp/headless-shell:stable                           → PUSHED
   ghcr.io/tailscale/tailscale:latest                      → PUSHED
   ollama/ollama:latest                                     → PUSHED
   tsl0922/ttyd:latest                                      → PUSHED
-  rclone/rclone:latest                                     → PUSHED
-  ghcr.io/openclaw-rocks/openclaw-operator:v0.25.2        → PUSHED
+  rclone/rclone:1.68                                       → PUSHED
+  ghcr.io/openclaw-rocks/openclaw-operator:v0.26.2        → PUSHED
 
-[ok]    Mirror done: 10 pushed, 0 skipped (already exist), 0 failed
+[ok]    Mirror done: 11 pushed, 0 skipped (already exist), 0 failed
 ```
 
 ### Failure: Docker daemon not running

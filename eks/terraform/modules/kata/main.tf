@@ -17,7 +17,7 @@ resource "kubernetes_namespace_v1" "kata" {
 
 resource "helm_release" "kata_deploy" {
   name       = "kata-deploy"
-  repository = "oci://ghcr.io/kata-containers/kata-deploy-charts"
+  repository = var.chart_repository != "" ? var.chart_repository : "oci://ghcr.io/kata-containers/kata-deploy-charts"
   chart      = "kata-deploy"
   version    = var.kata_version
   namespace  = kubernetes_namespace_v1.kata.metadata[0].name
@@ -26,8 +26,8 @@ resource "helm_release" "kata_deploy" {
 
   values = [yamlencode({
     image = {
-      reference = "public.ecr.aws/t6v6o5d5/kube-prometheus"
-      tag       = "kata-deploy-${var.kata_version}"
+      reference = var.ecr_host != "" ? "${var.ecr_host}/kata-containers/kata-deploy" : "quay.io/kata-containers/kata-deploy"
+      tag       = var.kata_version
     }
     nodeSelector = {
       "workload-type" = "kata"

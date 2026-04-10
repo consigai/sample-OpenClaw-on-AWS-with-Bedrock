@@ -83,6 +83,20 @@ variable "vpc_cidr" {
   type        = string
 }
 
+# --- Chart Repository ---------------------------------------------------------
+
+variable "chart_repository" {
+  description = "Override Helm chart OCI repository for kata-deploy (e.g. oci://ECR_HOST/charts for China). Empty = default ghcr.io."
+  type        = string
+  default     = ""
+}
+
+variable "ecr_host" {
+  description = "Private ECR host for China image mirrors. Empty = use upstream."
+  type        = string
+  default     = ""
+}
+
 # --- Region / Partition -------------------------------------------------------
 
 variable "is_china_region" {

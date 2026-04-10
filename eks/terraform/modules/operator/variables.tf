@@ -16,7 +16,19 @@ variable "operator_namespace" {
 variable "operator_version" {
   description = "Version of the OpenClaw Operator Helm chart to deploy"
   type        = string
-  default     = "0.22.2"
+  default     = "0.26.2"
+}
+
+variable "chart_repository" {
+  description = "Override Helm chart OCI repository (e.g. oci://ECR_HOST/charts for China). Empty = default ghcr.io."
+  type        = string
+  default     = ""
+}
+
+variable "ecr_host" {
+  description = "Private ECR host for China image mirrors (e.g. ACCOUNT.dkr.ecr.REGION.amazonaws.com.cn). Empty = use upstream."
+  type        = string
+  default     = ""
 }
 
 variable "is_china_region" {

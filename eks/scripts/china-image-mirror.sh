@@ -35,14 +35,27 @@ PLATFORM="linux/arm64"
 SKIP_PUSH=false
 [[ "${1:-}" == "--skip-push" ]] && SKIP_PUSH=true
 
+# NOTE: For full deployment (including Helm chart mirroring and admin console build),
+# use build-and-mirror.sh instead. This script only mirrors the minimum set of
+# container images needed for OpenClawInstance pods.
+
 # Each entry: "upstream_image|ecr_path"
 # The ECR path must match what the operator produces after spec.registry replacement
 IMAGES=(
-  "busybox:1.37|busybox:1.37"
-  "nginx:1.27-alpine|nginx:1.27-alpine"
-  "ghcr.io/astral-sh/uv:0.6-bookworm-slim|astral-sh/uv:0.6-bookworm-slim"
+  # Core (always needed)
   "ghcr.io/openclaw/openclaw:latest|openclaw/openclaw:latest"
+  "ghcr.io/astral-sh/uv:0.6-bookworm-slim|astral-sh/uv:0.6-bookworm-slim"
+  "busybox:1.37|library/busybox:1.37"
+  "nginx:1.27-alpine|library/nginx:1.27-alpine"
   "otel/opentelemetry-collector:0.120.0|otel/opentelemetry-collector:0.120.0"
+  # Sidecars (needed when enabled)
+  "chromedp/headless-shell:stable|chromedp/headless-shell:stable"
+  "ghcr.io/tailscale/tailscale:latest|tailscale/tailscale:latest"
+  "ollama/ollama:latest|ollama/ollama:latest"
+  "tsl0922/ttyd:latest|tsl0922/ttyd:latest"
+  "rclone/rclone:1.68|rclone/rclone:1.68"
+  # Operator
+  "ghcr.io/openclaw-rocks/openclaw-operator:v0.26.2|openclaw-rocks/openclaw-operator:v0.26.2"
 )
 
 echo -e "${GREEN}=== China Image Mirror ===${NC}"

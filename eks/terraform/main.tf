@@ -77,6 +77,10 @@ locals {
 
   pod_identity_principal = "pods.eks.amazonaws.com"
 
+  # ECR host for China region Helm chart mirroring (see build-and-mirror.sh)
+  ecr_host         = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${local.region}.${local.dns_suffix}"
+  chart_repository = local.is_china_region ? "oci://${local.ecr_host}/charts" : ""
+
   openclaw_namespace = "openclaw"
   operator_namespace = "openclaw-operator-system"
   kata_namespace     = "kata-system"

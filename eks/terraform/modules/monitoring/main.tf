@@ -2,6 +2,20 @@
 # Monitoring Module - Prometheus + Grafana via kube-prometheus-stack
 ################################################################################
 
+locals {
+  # Image registry: use private ECR mirror for China, upstream for global
+  img = var.ecr_host != "" ? var.ecr_host : ""
+
+  prometheus_image     = var.ecr_host != "" ? "${var.ecr_host}/prometheus/prometheus" : "quay.io/prometheus/prometheus"
+  prom_operator_image  = var.ecr_host != "" ? "${var.ecr_host}/prometheus-operator/prometheus-operator" : "quay.io/prometheus-operator/prometheus-operator"
+  config_reloader_image = var.ecr_host != "" ? "${var.ecr_host}/prometheus-operator/prometheus-config-reloader" : "quay.io/prometheus-operator/prometheus-config-reloader"
+  webhook_certgen_image = var.ecr_host != "" ? "${var.ecr_host}/ingress-nginx/kube-webhook-certgen" : "registry.k8s.io/ingress-nginx/kube-webhook-certgen"
+  kube_state_image     = var.ecr_host != "" ? "${var.ecr_host}/kube-state-metrics/kube-state-metrics" : "registry.k8s.io/kube-state-metrics/kube-state-metrics"
+  node_exporter_image  = var.ecr_host != "" ? "${var.ecr_host}/prometheus/node-exporter" : "quay.io/prometheus/node-exporter"
+  grafana_image        = var.ecr_host != "" ? "${var.ecr_host}/grafana/grafana" : "docker.io/grafana/grafana"
+  sidecar_image        = var.ecr_host != "" ? "${var.ecr_host}/kiwigrid/k8s-sidecar" : "quay.io/kiwigrid/k8s-sidecar"
+}
+
 resource "kubernetes_namespace_v1" "monitoring" {
   metadata {
     name = "monitoring"
@@ -27,7 +41,7 @@ resource "random_password" "grafana_admin" {
 
 resource "helm_release" "kube_prometheus_stack" {
   name       = "kube-prometheus-stack"
-  repository = "oci://public.ecr.aws/t6v6o5d5/helm"
+  repository = var.chart_repository != "" ? var.chart_repository : "https://prometheus-community.github.io/helm-charts"
   chart      = "kube-prometheus-stack"
   namespace  = kubernetes_namespace_v1.monitoring.metadata[0].name
   version    = "65.1.0"
@@ -37,23 +51,14 @@ resource "helm_release" "kube_prometheus_stack" {
   values = [
     yamlencode({
       # ----------------------------------------------------------------
-      # Global: pull all sub-chart images from public.ecr.aws mirrors
-      # so deployments in AWS China or air-gapped VPCs succeed without
-      # Docker Hub rate limits or GCR connectivity issues.
-      # ----------------------------------------------------------------
-      global = {
-        imageRegistry = "public.ecr.aws"
-      }
-
-      # ----------------------------------------------------------------
       # Prometheus Server
       # ----------------------------------------------------------------
       prometheus = {
         prometheusSpec = {
           image = {
-            registry   = "public.ecr.aws"
-            repository = "bitnami/prometheus"
-            tag        = "2.54.1"
+            registry   = ""
+            repository = local.prometheus_image
+            tag        = "v2.54.1"
           }
           storageSpec = {
             volumeClaimTemplate = {
@@ -91,23 +96,23 @@ resource "helm_release" "kube_prometheus_stack" {
       # ----------------------------------------------------------------
       prometheusOperator = {
         image = {
-          registry   = "public.ecr.aws"
-          repository = "bitnami/prometheus-operator"
-          tag        = "0.77.1"
+          registry   = ""
+          repository = local.prom_operator_image
+          tag        = "v0.77.1"
         }
         prometheusConfigReloader = {
           image = {
-            registry   = "public.ecr.aws"
-            repository = "kubecost/prometheus-config-reloader"
+            registry   = ""
+            repository = local.config_reloader_image
             tag        = "v0.77.1"
           }
         }
         admissionWebhooks = {
           patch = {
             image = {
-              registry   = "public.ecr.aws"
-              repository = "t6v6o5d5/kube-prometheus"
-              tag        = "kube-webhook-certgen-v20221220"
+              registry   = ""
+              repository = local.webhook_certgen_image
+              tag        = "v20221220-controller-v1.5.1-58-g787ea74b6"
             }
           }
         }
@@ -118,9 +123,9 @@ resource "helm_release" "kube_prometheus_stack" {
       # ----------------------------------------------------------------
       kube-state-metrics = {
         image = {
-          registry   = "public.ecr.aws"
-          repository = "bitnami/kube-state-metrics"
-          tag        = "2.13.0"
+          registry   = ""
+          repository = local.kube_state_image
+          tag        = "v2.13.0"
         }
       }
 
@@ -129,8 +134,8 @@ resource "helm_release" "kube_prometheus_stack" {
       # ----------------------------------------------------------------
       prometheus-node-exporter = {
         image = {
-          registry   = "public.ecr.aws"
-          repository = "bitnami/node-exporter"
+          registry   = ""
+          repository = local.node_exporter_image
           tag        = "1.8.2"
         }
       }
@@ -158,7 +163,7 @@ resource "helm_release" "kube_prometheus_stack" {
 
 resource "helm_release" "grafana" {
   name       = "grafana"
-  repository = "oci://public.ecr.aws/t6v6o5d5/helm"
+  repository = var.chart_repository != "" ? var.chart_repository : "https://grafana.github.io/helm-charts"
   chart      = "grafana"
   namespace  = kubernetes_namespace_v1.monitoring.metadata[0].name
 
@@ -167,9 +172,9 @@ resource "helm_release" "grafana" {
   values = [
     yamlencode({
       image = {
-        registry   = "public.ecr.aws"
-        repository = "t6v6o5d5/kube-prometheus"
-        tag        = "grafana-11.2.1"
+        registry   = ""
+        repository = local.grafana_image
+        tag        = "11.2.1"
       }
 
       # chown init container is not needed when running as non-root with
@@ -180,9 +185,9 @@ resource "helm_release" "grafana" {
 
       sidecar = {
         image = {
-          registry   = "public.ecr.aws"
-          repository = "t6v6o5d5/kube-prometheus"
-          tag        = "k8s-sidecar-1.27.4"
+          registry   = ""
+          repository = local.sidecar_image
+          tag        = "1.27.4"
         }
         dashboards = {
           enabled = true

@@ -151,6 +151,28 @@ echo ""
 echo -e "${YELLOW}  Generated: ${GENERATED}${NC}"
 
 # ─────────────────────────────────────────────────────────────────────────────
+# China: run mirror script BEFORE terraform apply
+# ─────────────────────────────────────────────────────────────────────────────
+if $IS_CHINA; then
+  echo ""
+  echo -e "${YELLOW}  China region detected — mirroring images and Helm charts to ECR...${NC}"
+  echo -e "  This is ${BOLD}required${NC} before terraform apply (ghcr.io, quay.io, Docker Hub are blocked)."
+  echo ""
+  MIRROR_SCRIPT="${SCRIPT_DIR}/build-and-mirror.sh"
+  if [[ -f "$MIRROR_SCRIPT" ]]; then
+    MIRROR_ARGS="--region ${REGION} --name ${NAME} --skip-build"
+    if [[ -n "${AWS_PROFILE:-}" ]]; then
+      MIRROR_ARGS="$MIRROR_ARGS --profile ${AWS_PROFILE}"
+    fi
+    bash "$MIRROR_SCRIPT" $MIRROR_ARGS
+  else
+    echo -e "${RED}  Error: build-and-mirror.sh not found at ${MIRROR_SCRIPT}${NC}"
+    echo -e "  Run it manually: bash eks/scripts/build-and-mirror.sh --region ${REGION} --name ${NAME}"
+    exit 1
+  fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Deploy EKS + Operator
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
@@ -189,14 +211,10 @@ else
   echo -e "  Deploy instances with: kubectl apply -f manifests/examples/openclaw-bedrock-instance.yaml"
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
-# China image mirror reminder
-# ─────────────────────────────────────────────────────────────────────────────
 if $IS_CHINA; then
   echo ""
-  echo -e "${YELLOW}  China region detected.${NC} Run the image mirror script before deploying instances:"
-  echo -e "    ${BOLD}./scripts/china-image-mirror.sh${NC}"
-  echo -e "  Then set ${BOLD}spec.registry${NC} in your OpenClawInstance to your China ECR."
+  echo -e "${YELLOW}  China region:${NC} images mirrored to ECR. When deploying OpenClaw instances, set:"
+  echo -e "    ${BOLD}spec.registry${NC}: your China ECR endpoint"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────

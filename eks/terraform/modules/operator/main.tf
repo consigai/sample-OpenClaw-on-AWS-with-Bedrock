@@ -19,7 +19,7 @@ resource "kubernetes_namespace_v1" "operator" {
 # -----------------------------------------------------------------------------
 resource "helm_release" "openclaw_operator" {
   name       = "openclaw-operator"
-  repository = "oci://ghcr.io/openclaw-rocks/charts"
+  repository = var.chart_repository != "" ? var.chart_repository : "oci://ghcr.io/openclaw-rocks/charts"
   chart      = "openclaw-operator"
   version    = var.operator_version
   namespace  = kubernetes_namespace_v1.operator.metadata[0].name
@@ -34,20 +34,20 @@ resource "helm_release" "openclaw_operator" {
     value = "true"
   }
 
-  # For China region, use ECR mirror image
+  # For China region, use private ECR mirror (populated by build-and-mirror.sh)
   dynamic "set" {
-    for_each = var.is_china_region ? [1] : []
+    for_each = var.ecr_host != "" ? [1] : []
     content {
       name  = "image.repository"
-      value = "public.ecr.aws/t6v6o5d5/kube-prometheus"
+      value = "${var.ecr_host}/openclaw-rocks/openclaw-operator"
     }
   }
 
   dynamic "set" {
-    for_each = var.is_china_region ? [1] : []
+    for_each = var.ecr_host != "" ? [1] : []
     content {
       name  = "image.tag"
-      value = "openclaw-operator-v${var.operator_version}"
+      value = "v${var.operator_version}"
     }
   }
 

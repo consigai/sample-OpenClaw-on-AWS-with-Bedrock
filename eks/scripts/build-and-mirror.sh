@@ -55,6 +55,9 @@ SKIP_BUILD=false
 MIRROR_MODE="auto"  # auto | always | never
 PLATFORM=""          # e.g. linux/arm64 for cross-arch builds
 
+# Operator version — keep in sync with eks/terraform/modules/operator/variables.tf
+OPERATOR_VERSION="0.26.2"
+
 while [[ $# -gt 0 ]]; do
   case $1 in
     --region)      REGION="$2"; shift 2 ;;
@@ -90,9 +93,11 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # ── ECR Login ──────────────────────────────────────────────────
-info "Logging in to ECR..."
-aws ecr get-login-password $AWS_PROFILE_ARG --region "$REGION" \
-  | docker login --username AWS --password-stdin "$ECR_HOST" 2>/dev/null
+info "Logging in to ECR (Docker + Helm)..."
+ECR_PASSWORD=$(aws ecr get-login-password $AWS_PROFILE_ARG --region "$REGION")
+echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_HOST" 2>/dev/null
+echo "$ECR_PASSWORD" | helm registry login "$ECR_HOST" --username AWS --password-stdin 2>/dev/null
+unset ECR_PASSWORD
 success "ECR login"
 
 # ── Create admin console ECR repo ──────────────────────────────
@@ -118,41 +123,47 @@ else
   warn "Skipping build (--skip-build)"
 fi
 
-# ── Mirror operator images (required for China, optional for global) ──
-# These are ALL images the OpenClaw Operator may use for init containers,
-# main containers, and sidecars. The spec.registry CRD field rewrites the
-# registry portion of each image.
-#
-# Source registry → ECR path mapping:
-#   ghcr.io/openclaw/openclaw:latest    → ${ECR}/openclaw/openclaw:latest
-#   ghcr.io/astral-sh/uv:0.6-...       → ${ECR}/astral-sh/uv:0.6-...
-#   nginx:1.27-alpine                   → ${ECR}/library/nginx:1.27-alpine
-#   otel/opentelemetry-collector:0.120  → ${ECR}/otel/opentelemetry-collector:0.120
-#   chromedp/headless-shell:stable      → ${ECR}/chromedp/headless-shell:stable
-#   ghcr.io/tailscale/tailscale:latest  → ${ECR}/tailscale/tailscale:latest
-#   ollama/ollama:latest                → ${ECR}/ollama/ollama:latest
-#   tsl0922/ttyd:latest                 → ${ECR}/tsl0922/ttyd:latest
-#   rclone/rclone:latest                → ${ECR}/rclone/rclone:latest
-#   ghcr.io/openclaw-rocks/openclaw-operator:v0.25.2 → ${ECR}/openclaw-rocks/openclaw-operator:v0.25.2
+# ── Mirror container images (required for China, optional for global) ──
+# ALL images from registries blocked in China (ghcr.io, docker.io, quay.io,
+# registry.k8s.io). The ECR path preserves the upstream org/repo structure
+# so spec.registry CRD rewriting works correctly.
 
 MIRROR_IMAGES=(
-  # Core — always needed
+  # ── OpenClaw Operator workload images ──
+  # Core — always needed for OpenClawInstance pods
   "ghcr.io/openclaw/openclaw:latest|openclaw/openclaw:latest"
   "ghcr.io/astral-sh/uv:0.6-bookworm-slim|astral-sh/uv:0.6-bookworm-slim"
+  "busybox:1.37|library/busybox:1.37"
   "nginx:1.27-alpine|library/nginx:1.27-alpine"
   "otel/opentelemetry-collector:0.120.0|otel/opentelemetry-collector:0.120.0"
-
   # Sidecars — needed when enabled in CRD spec
   "chromedp/headless-shell:stable|chromedp/headless-shell:stable"
   "ghcr.io/tailscale/tailscale:latest|tailscale/tailscale:latest"
   "ollama/ollama:latest|ollama/ollama:latest"
   "tsl0922/ttyd:latest|tsl0922/ttyd:latest"
+  # Backup/restore — needed when spec.backup is configured
+  "rclone/rclone:1.68|rclone/rclone:1.68"
 
-  # Backup — needed when spec.backup is configured
-  "rclone/rclone:latest|rclone/rclone:latest"
+  # ── Operator controller ──
+  "ghcr.io/openclaw-rocks/openclaw-operator:v${OPERATOR_VERSION}|openclaw-rocks/openclaw-operator:v${OPERATOR_VERSION}"
 
-  # Operator itself
-  "ghcr.io/openclaw-rocks/openclaw-operator:v0.25.2|openclaw-rocks/openclaw-operator:v0.25.2"
+  # ── Kata Containers (optional: enable_kata) ──
+  "quay.io/kata-containers/kata-deploy:3.27.0|kata-containers/kata-deploy:3.27.0"
+
+  # ── LiteLLM (optional: enable_litellm) ──
+  "docker.litellm.ai/berriai/litellm:main-latest|berriai/litellm:main-latest"
+
+  # ── Monitoring stack (optional: enable_monitoring) ──
+  # Grafana
+  "grafana/grafana:11.2.1|grafana/grafana:11.2.1"
+  "quay.io/kiwigrid/k8s-sidecar:1.27.4|kiwigrid/k8s-sidecar:1.27.4"
+  # kube-prometheus-stack
+  "quay.io/prometheus/prometheus:v2.54.1|prometheus/prometheus:v2.54.1"
+  "quay.io/prometheus-operator/prometheus-operator:v0.77.1|prometheus-operator/prometheus-operator:v0.77.1"
+  "quay.io/prometheus-operator/prometheus-config-reloader:v0.77.1|prometheus-operator/prometheus-config-reloader:v0.77.1"
+  "registry.k8s.io/ingress-nginx/kube-webhook-certgen:v20221220-controller-v1.5.1-58-g787ea74b6|ingress-nginx/kube-webhook-certgen:v20221220-controller-v1.5.1-58-g787ea74b6"
+  "registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.13.0|kube-state-metrics/kube-state-metrics:v2.13.0"
+  "quay.io/prometheus/node-exporter:1.8.2|prometheus/node-exporter:1.8.2"
 )
 
 # Decide whether to mirror
@@ -234,6 +245,96 @@ else
   fi
 fi
 
+# ── Mirror Helm charts (OCI artifacts) ────────────────────────
+# Terraform helm_release resources pull charts from registries that are
+# inaccessible from China. Mirror them to ECR so terraform can use
+# oci://${ECR_HOST}/charts as the repository override.
+
+MIRROR_CHARTS=(
+  # Required — OpenClaw Operator (always deployed)
+  "oci://ghcr.io/openclaw-rocks/charts|openclaw-operator|${OPERATOR_VERSION}"
+  # Optional — uncomment if using these Terraform modules in China:
+  # "oci://ghcr.io/kata-containers/kata-deploy-charts|kata-deploy|3.27.0"
+  # "oci://ghcr.io/berriai/litellm-helm|litellm-helm|"
+)
+
+# Monitoring/Grafana charts are from HTTPS repos (not OCI). Pull as OCI from
+# the repos, convert, and push to ECR. Handled separately below.
+MIRROR_HTTPS_CHARTS=(
+  # "prometheus-community|https://prometheus-community.github.io/helm-charts|kube-prometheus-stack|65.1.0"
+  # "grafana|https://grafana.github.io/helm-charts|grafana|"
+)
+
+if $DO_MIRROR; then
+  info "Mirroring Helm charts to ECR ($ECR_HOST)..."
+  echo ""
+  CHART_DIR=$(mktemp -d)
+  CHART_FAIL=0
+  CHART_PUSH=0
+
+  for entry in "${MIRROR_CHARTS[@]}"; do
+    [[ "$entry" == \#* ]] && continue
+    IFS='|' read -r REPO CHART VERSION <<< "$entry"
+    printf "  %-55s → " "${REPO}/${CHART}:${VERSION}"
+
+    # Pull chart from ghcr.io
+    if ! helm pull "${REPO}/${CHART}" --version "$VERSION" --destination "$CHART_DIR" 2>/dev/null; then
+      echo -e "${RED}PULL FAILED${NC}"
+      CHART_FAIL=$((CHART_FAIL + 1))
+      continue
+    fi
+
+    # Create ECR repo for the chart
+    aws ecr create-repository $AWS_PROFILE_ARG \
+      --repository-name "charts/${CHART}" \
+      --region "$REGION" 2>/dev/null || true
+
+    # Push to ECR as OCI artifact
+    CHART_FILE=$(ls "$CHART_DIR/${CHART}"-*.tgz 2>/dev/null | sort -V | tail -1)
+    if [[ -n "$CHART_FILE" ]] && helm push "$CHART_FILE" "oci://${ECR_HOST}/charts" 2>/dev/null; then
+      echo -e "${GREEN}PUSHED${NC}"
+      CHART_PUSH=$((CHART_PUSH + 1))
+    else
+      echo -e "${RED}PUSH FAILED${NC}"
+      CHART_FAIL=$((CHART_FAIL + 1))
+    fi
+    rm -f "$CHART_FILE"
+  done
+
+  rm -rf "$CHART_DIR"
+  echo ""
+  if [[ $CHART_FAIL -eq 0 ]]; then
+    success "Chart mirror done: ${CHART_PUSH} pushed, ${CHART_FAIL} failed"
+  else
+    warn "Chart mirror done: ${CHART_PUSH} pushed, ${CHART_FAIL} FAILED"
+  fi
+
+  # Mirror HTTPS-repo charts (monitoring, grafana)
+  for entry in "${MIRROR_HTTPS_CHARTS[@]}"; do
+    [[ "$entry" == \#* ]] && continue
+    IFS='|' read -r REPO_NAME REPO_URL CHART VERSION <<< "$entry"
+    printf "  %-55s → " "${REPO_URL} ${CHART}:${VERSION:-latest}"
+    CHART_DIR2=$(mktemp -d)
+    helm repo add "$REPO_NAME" "$REPO_URL" --force-update > /dev/null 2>&1
+    PULL_ARGS="$REPO_NAME/$CHART"
+    [[ -n "$VERSION" ]] && PULL_ARGS="$PULL_ARGS --version $VERSION"
+    if ! helm pull $PULL_ARGS --destination "$CHART_DIR2" 2>/dev/null; then
+      echo -e "${RED}PULL FAILED${NC}"
+      continue
+    fi
+    aws ecr create-repository $AWS_PROFILE_ARG \
+      --repository-name "charts/${CHART}" \
+      --region "$REGION" 2>/dev/null || true
+    CHART_FILE=$(ls "$CHART_DIR2/${CHART}"-*.tgz 2>/dev/null | sort -V | tail -1)
+    if [[ -n "$CHART_FILE" ]] && helm push "$CHART_FILE" "oci://${ECR_HOST}/charts" 2>/dev/null; then
+      echo -e "${GREEN}PUSHED${NC}"
+    else
+      echo -e "${RED}PUSH FAILED${NC}"
+    fi
+    rm -rf "$CHART_DIR2"
+  done
+fi
+
 # ── Summary ────────────────────────────────────────────────────
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -245,6 +346,9 @@ if $IS_CHINA; then
   echo ""
   echo "  When deploying OpenClaw instances, set:"
   echo "    globalRegistry: ${ECR_HOST}"
+  echo ""
+  echo "  Helm chart repo for Terraform (operator/kata/litellm):"
+  echo "    chart_repository = \"oci://${ECR_HOST}/charts\""
 fi
 echo ""
 echo "  Next: run terraform apply"

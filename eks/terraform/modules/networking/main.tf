@@ -25,7 +25,7 @@ module "alb_controller_irsa" {
 
 resource "helm_release" "alb_controller" {
   name       = "aws-load-balancer-controller"
-  repository = "https://aws.github.io/eks-charts"
+  repository = var.chart_repository != "" ? var.chart_repository : (var.is_china_region ? "oci://public.ecr.aws/eks" : "https://aws.github.io/eks-charts")
   chart      = "aws-load-balancer-controller"
   namespace  = "kube-system"
 

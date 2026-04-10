@@ -46,6 +46,50 @@ AWS 中国区域（`cn-northwest-1`、`cn-north-1`）存在网络限制：
 | **AWS 中国账户** | 独立分区（`aws-cn`） | 需要单独的 IAM 凭证 |
 | **AWS CLI Profile** | 中国账户需要独立的 Profile | `aws configure --profile china` |
 
+#### 中国区网络依赖全景
+
+以下表格列出所有被中国区域防火墙阻断或受影响的外部网络依赖：
+
+| 依赖类型 | 来源地址 | 用途 | 阻断级别 | 解决方案 |
+|----------|---------|------|---------|---------|
+| **Helm Chart (OCI)** | `oci://ghcr.io/openclaw-rocks/charts` | OpenClaw Operator | 完全阻断 | `build-and-mirror.sh` 同步至 ECR，TF 自动使用 `chart_repository` |
+| **Helm Chart (OCI)** | `oci://ghcr.io/kata-containers/kata-deploy-charts` | Kata Containers（可选） | 完全阻断 | 同上 |
+| **Helm Chart (OCI)** | `oci://ghcr.io/berriai/litellm-helm` | LiteLLM 代理（可选） | 完全阻断 | 同上 |
+| **Helm Chart (HTTPS)** | `https://aws.github.io/eks-charts` | ALB Controller（可选） | 间歇性慢 | GitHub Pages 通常可达；超时则需 VPN |
+| **容器镜像** | `ghcr.io/*` | OpenClaw、Operator、uv、Tailscale | 完全阻断 | `build-and-mirror.sh` 同步 + `spec.registry` 重写 |
+| **容器镜像** | Docker Hub (`docker.io`) | nginx、OTel、chromium、ollama、ttyd、rclone、busybox | 完全阻断 | 同上 |
+| **容器镜像** | `quay.io` | Kata Containers 默认镜像 | 完全阻断 | TF 模块已重写至 `public.ecr.aws` |
+| **容器镜像** | `public.ecr.aws` | 监控栈、Karpenter、LiteLLM、Kata、ALB Controller 镜像 | **可访问**（AWS 服务） | 无需额外操作 |
+| **EKS Managed Addons** | AWS 内部 | EBS/EFS CSI、Pod Identity Agent | **可访问** | 无需额外操作 |
+| **Terraform Registry** | `registry.terraform.io` | Provider 下载 | **可访问** | 无需额外操作 |
+| **npm Registry** | `registry.npmjs.org` | Operator init-skills（运行时） | 完全阻断 | 避免在 CRD 中使用 `spec.skills`（npm 前缀）；或预装至镜像 |
+| **GitHub API** | `api.github.com` | Operator init-skills（pack: 前缀） | 完全阻断 | 避免使用 `pack:` 前缀的 skills |
+
+> **重要：** `terraform apply` 需要拉取 Helm Chart。在中国区域运行 Terraform 时，必须先执行 `build-and-mirror.sh` 将 Helm Chart 同步至 ECR，Terraform 会自动使用 ECR 作为 Chart 仓库。在全球区域运行 Terraform（远程连接中国 EKS API Server）则无此限制。
+
+#### Helm Chart 使用的容器镜像全景
+
+以下列出所有 Terraform 模块安装的 Helm Chart 及其使用的容器镜像。`public.ecr.aws` 上的镜像可从中国区域直接拉取（AWS 全球服务），无需额外同步。
+
+| Helm Chart | Chart 来源 | 容器镜像（上游） | 镜像来源 | 中国可用 |
+|------------|-----------|---------|---------|---------|
+| **openclaw-operator** | `oci://ghcr.io/openclaw-rocks/charts` | `ghcr.io/openclaw-rocks/openclaw-operator:v0.26.2` | ghcr.io | ❌ 需同步 |
+| **aws-load-balancer-controller** | `https://aws.github.io/eks-charts` | `public.ecr.aws/eks/aws-load-balancer-controller:v3.2.1` | ECR Public | ✅ |
+| **kube-prometheus-stack** | `https://prometheus-community.github.io/helm-charts` | `quay.io/prometheus/prometheus:v2.54.1` | quay.io | ❌ 需同步 |
+| | | `quay.io/prometheus-operator/prometheus-operator:v0.77.1` | quay.io | ❌ 需同步 |
+| | | `quay.io/prometheus-operator/prometheus-config-reloader:v0.77.1` | quay.io | ❌ 需同步 |
+| | | `registry.k8s.io/ingress-nginx/kube-webhook-certgen:v20221220-...` | registry.k8s.io | ❌ 需同步 |
+| | | `registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.13.0` | registry.k8s.io | ❌ 需同步 |
+| | | `quay.io/prometheus/node-exporter:1.8.2` | quay.io | ❌ 需同步 |
+| **grafana** | `https://grafana.github.io/helm-charts` | `docker.io/grafana/grafana:11.2.1` | Docker Hub | ❌ 需同步 |
+| | | `quay.io/kiwigrid/k8s-sidecar:1.27.4` | quay.io | ❌ 需同步 |
+| **karpenter** | `oci://public.ecr.aws/karpenter` | `public.ecr.aws/karpenter/controller:1.7.4` | ECR Public | ✅ |
+| **kata-deploy** | `oci://ghcr.io/kata-containers/kata-deploy-charts` | `quay.io/kata-containers/kata-deploy:3.27.0` | quay.io | ❌ 需同步 |
+| **litellm** | `oci://ghcr.io/berriai/litellm-helm` | `docker.litellm.ai/berriai/litellm:main-latest` | docker.litellm.ai | ❌ 需同步 |
+| | | `public.ecr.aws/bitnami/postgresql:latest` | ECR Public | ✅ |
+
+> **结论：** `build-and-mirror.sh` 会将所有上游镜像同步至中国区私有 ECR，Terraform 自动为中国区域使用 ECR 镜像。仅 `public.ecr.aws` 上的镜像（ALB Controller、Karpenter、PostgreSQL）无需额外同步。
+
 #### 中国区模型提供商
 
 Amazon Bedrock 不在 AWS 中国区域运营。两种替代方案：
@@ -73,20 +117,31 @@ bash eks/scripts/build-and-mirror.sh \
   --profile china
 ```
 
-该脚本构建管理控制台镜像，并同步全部 10 个 Operator 镜像至中国区 ECR：
+该脚本构建管理控制台镜像，同步全部 11 个 Operator 容器镜像至中国区 ECR，并同步 Helm Chart OCI 制品：
 
-| 镜像 | 用途 |
-|------|------|
-| `ghcr.io/openclaw/openclaw:latest` | OpenClaw 主容器 |
-| `ghcr.io/astral-sh/uv:0.6-bookworm-slim` | Python 依赖安装 Init 容器 |
-| `nginx:1.27-alpine` | Gateway 代理 Sidecar |
-| `otel/opentelemetry-collector:0.120.0` | 可观测性 Sidecar |
-| `chromedp/headless-shell:stable` | 浏览器自动化 Sidecar |
-| `ghcr.io/tailscale/tailscale:latest` | Tailscale VPN Sidecar |
-| `ollama/ollama:latest` | 本地 LLM 推理 Sidecar |
-| `tsl0922/ttyd:latest` | Web 终端 Sidecar |
-| `rclone/rclone:latest` | S3 备份 Job |
-| `ghcr.io/openclaw-rocks/openclaw-operator:v0.25.2` | Operator 本身 |
+**容器镜像（11 个）：**
+
+| 镜像 | 用途 | 来源 |
+|------|------|------|
+| `ghcr.io/openclaw/openclaw:latest` | OpenClaw 主容器 + init 容器 | ghcr.io |
+| `ghcr.io/astral-sh/uv:0.6-bookworm-slim` | Python 依赖安装 Init 容器 | ghcr.io |
+| `busybox:1.37` | 配置文件复制 Init 容器（overwrite 模式） | Docker Hub |
+| `nginx:1.27-alpine` | Gateway 代理 Sidecar | Docker Hub |
+| `otel/opentelemetry-collector:0.120.0` | 可观测性 Sidecar | Docker Hub |
+| `chromedp/headless-shell:stable` | 浏览器自动化 Sidecar | Docker Hub |
+| `ghcr.io/tailscale/tailscale:latest` | Tailscale VPN Sidecar | ghcr.io |
+| `ollama/ollama:latest` | 本地 LLM 推理 Sidecar | Docker Hub |
+| `tsl0922/ttyd:latest` | Web 终端 Sidecar | Docker Hub |
+| `rclone/rclone:1.68` | S3 备份/恢复 Job | Docker Hub |
+| `ghcr.io/openclaw-rocks/openclaw-operator:v0.26.2` | Operator 本身 | ghcr.io |
+
+**Helm Chart OCI 制品（1-3 个）：**
+
+| Chart | 用途 | 来源 |
+|-------|------|------|
+| `oci://ghcr.io/openclaw-rocks/charts/openclaw-operator` | Operator 部署（必需） | ghcr.io |
+| `oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy` | Kata Containers（可选） | ghcr.io |
+| `oci://ghcr.io/berriai/litellm-helm/litellm-helm` | LiteLLM 代理（可选） | ghcr.io |
 
 ---
 
@@ -94,7 +149,9 @@ bash eks/scripts/build-and-mirror.sh \
 
 创建完整基础设施：VPC、EKS 集群、EFS、ALB Controller、OpenClaw Operator、管理控制台（含 Ingress）及所有 AWS 支撑资源。
 
-### 第一步：构建并推送镜像
+### 第一步：构建并推送镜像（必须在 terraform apply 之前执行）
+
+> **⚠ 中国区域必须先执行此步骤。** `terraform apply` 会安装 Helm Chart 和拉取容器镜像。在中国区域，这些来源（ghcr.io、quay.io、Docker Hub、registry.k8s.io）均被阻断。`build-and-mirror.sh` 会将所有 Helm Chart 和容器镜像同步至中国区 ECR，Terraform 自动使用 ECR 作为来源。**跳过此步骤将导致 `terraform apply` 失败。**
 
 Terraform 会创建 ECR 仓库，但不会构建 Docker 镜像。需先执行：
 
@@ -667,28 +724,36 @@ PLATFORM="linux/arm64"  # Graviton 节点
 # 核心镜像（必需）
 docker pull --platform $PLATFORM ghcr.io/openclaw/openclaw:latest
 docker pull --platform $PLATFORM ghcr.io/astral-sh/uv:0.6-bookworm-slim
+docker pull --platform $PLATFORM busybox:1.37
 docker pull --platform $PLATFORM nginx:1.27-alpine
 docker pull --platform $PLATFORM otel/opentelemetry-collector:0.120.0
-docker pull --platform $PLATFORM ghcr.io/openclaw-rocks/openclaw-operator:v0.25.2
+docker pull --platform $PLATFORM ghcr.io/openclaw-rocks/openclaw-operator:v0.26.2
 
 # 可选 sidecar 镜像
-docker pull --platform $PLATFORM chromedp/headless-shell:stable  # 浏览器沙箱
-docker pull --platform $PLATFORM rclone/rclone:latest             # 备份
-docker pull --platform $PLATFORM tsl0922/ttyd:latest              # Web 终端
-docker pull --platform $PLATFORM ghcr.io/tailscale/tailscale:latest  # VPN
+docker pull --platform $PLATFORM chromedp/headless-shell:stable       # 浏览器沙箱
+docker pull --platform $PLATFORM rclone/rclone:1.68                   # 备份/恢复
+docker pull --platform $PLATFORM tsl0922/ttyd:latest                  # Web 终端
+docker pull --platform $PLATFORM ghcr.io/tailscale/tailscale:latest   # VPN
+
+# 拉取 Helm Chart OCI 制品（Terraform 部署需要）
+helm pull oci://ghcr.io/openclaw-rocks/charts/openclaw-operator --version 0.26.2 --destination .
+# 如使用 Kata/LiteLLM 模块，取消注释：
+# helm pull oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy --version 3.27.0 --destination .
+# helm pull oci://ghcr.io/berriai/litellm-helm/litellm-helm --destination .
 
 # 保存为 tar.gz（批量打包减少传输次数）
 docker save \
   ghcr.io/openclaw/openclaw:latest \
   ghcr.io/astral-sh/uv:0.6-bookworm-slim \
+  busybox:1.37 \
   nginx:1.27-alpine \
   otel/opentelemetry-collector:0.120.0 \
-  ghcr.io/openclaw-rocks/openclaw-operator:v0.25.2 \
+  ghcr.io/openclaw-rocks/openclaw-operator:v0.26.2 \
   | gzip > core-images.tar.gz
 
 docker save \
   chromedp/headless-shell:stable \
-  rclone/rclone:latest \
+  rclone/rclone:1.68 \
   tsl0922/ttyd:latest \
   ghcr.io/tailscale/tailscale:latest \
   | gzip > sidecar-images.tar.gz
@@ -718,11 +783,13 @@ aws configure --profile china
 
 S3_BUCKET="你的中国S3桶名"  # 使用已有桶或先创建一个
 
-# 上传镜像文件和项目包
+# 上传镜像文件、Helm Chart 和项目包
 aws s3 cp core-images.tar.gz s3://$S3_BUCKET/openclaw-deploy/ --profile china --region cn-northwest-1
 aws s3 cp sidecar-images.tar.gz s3://$S3_BUCKET/openclaw-deploy/ --profile china --region cn-northwest-1
 aws s3 cp admin-console.tar.gz s3://$S3_BUCKET/openclaw-deploy/ --profile china --region cn-northwest-1
 aws s3 cp openclaw-eks-project.tar.gz s3://$S3_BUCKET/openclaw-deploy/ --profile china --region cn-northwest-1
+# Helm Chart OCI 制品
+aws s3 cp openclaw-operator-0.26.2.tgz s3://$S3_BUCKET/openclaw-deploy/ --profile china --region cn-northwest-1
 ```
 
 > **提示：** 跨境 S3 上传速度约 1-2 MiB/s。核心镜像（~1GB）约需 15-20 分钟。上传完成后，中国区域内 S3→EC2 下载速度可达 200+ MiB/s。
@@ -740,6 +807,7 @@ aws s3 cp s3://$S3_BUCKET/openclaw-deploy/core-images.tar.gz /tmp/
 aws s3 cp s3://$S3_BUCKET/openclaw-deploy/sidecar-images.tar.gz /tmp/
 aws s3 cp s3://$S3_BUCKET/openclaw-deploy/admin-console.tar.gz /tmp/
 aws s3 cp s3://$S3_BUCKET/openclaw-deploy/openclaw-eks-project.tar.gz ~/
+aws s3 cp s3://$S3_BUCKET/openclaw-deploy/openclaw-operator-0.26.2.tgz /tmp/
 
 # 解压项目
 cd ~ && tar xzf openclaw-eks-project.tar.gz
@@ -759,42 +827,52 @@ aws ecr get-login-password --region $REGION | docker login --username AWS --pass
 NAME="openclaw-cn"  # 与 Terraform var.name 保持一致
 
 # 创建 ECR 仓库（幂等操作）
-for repo in openclaw/openclaw astral-sh/uv library/nginx otel/opentelemetry-collector \
-            openclaw-rocks/openclaw-operator chromedp/headless-shell rclone/rclone \
-            tsl0922/ttyd tailscale/tailscale ${NAME}/admin-console; do
+for repo in openclaw/openclaw astral-sh/uv library/busybox library/nginx \
+            otel/opentelemetry-collector openclaw-rocks/openclaw-operator \
+            chromedp/headless-shell rclone/rclone tsl0922/ttyd \
+            tailscale/tailscale charts/openclaw-operator ${NAME}/admin-console; do
   aws ecr create-repository --repository-name $repo --region $REGION 2>/dev/null || true
 done
 
 # 标记并推送核心镜像
 docker tag ghcr.io/openclaw/openclaw:latest $ECR/openclaw/openclaw:latest
 docker tag ghcr.io/astral-sh/uv:0.6-bookworm-slim $ECR/astral-sh/uv:0.6-bookworm-slim
+docker tag busybox:1.37 $ECR/library/busybox:1.37
 docker tag nginx:1.27-alpine $ECR/library/nginx:1.27-alpine
 docker tag otel/opentelemetry-collector:0.120.0 $ECR/otel/opentelemetry-collector:0.120.0
-docker tag ghcr.io/openclaw-rocks/openclaw-operator:v0.25.2 $ECR/openclaw-rocks/openclaw-operator:v0.25.2
+docker tag ghcr.io/openclaw-rocks/openclaw-operator:v0.26.2 $ECR/openclaw-rocks/openclaw-operator:v0.26.2
 docker tag openclaw-admin-console:latest $ECR/${NAME}/admin-console:latest
 
 for img in openclaw/openclaw:latest astral-sh/uv:0.6-bookworm-slim \
-           library/nginx:1.27-alpine otel/opentelemetry-collector:0.120.0 \
-           openclaw-rocks/openclaw-operator:v0.25.2 ${NAME}/admin-console:latest; do
+           library/busybox:1.37 library/nginx:1.27-alpine \
+           otel/opentelemetry-collector:0.120.0 \
+           openclaw-rocks/openclaw-operator:v0.26.2 ${NAME}/admin-console:latest; do
   echo "Pushing $img..."
   docker push $ECR/$img
 done
 
 # 推送可选 sidecar 镜像
 docker tag chromedp/headless-shell:stable $ECR/chromedp/headless-shell:stable
-docker tag rclone/rclone:latest $ECR/rclone/rclone:latest
+docker tag rclone/rclone:1.68 $ECR/rclone/rclone:1.68
 docker tag tsl0922/ttyd:latest $ECR/tsl0922/ttyd:latest
 docker tag ghcr.io/tailscale/tailscale:latest $ECR/tailscale/tailscale:latest
 
-for img in chromedp/headless-shell:stable rclone/rclone:latest \
+for img in chromedp/headless-shell:stable rclone/rclone:1.68 \
            tsl0922/ttyd:latest tailscale/tailscale:latest; do
   docker push $ECR/$img
 done
 
-echo "所有镜像已推送到 $ECR"
+# 推送 Helm Chart OCI 制品（Terraform 部署需要）
+helm registry login "$ECR" --username AWS \
+  --password "$(aws ecr get-login-password --region $REGION)"
+helm push /tmp/openclaw-operator-0.26.2.tgz oci://$ECR/charts
+
+echo "所有镜像和 Helm Chart 已推送到 $ECR"
 ```
 
 ### 步骤 7：Terraform 部署
+
+> **⚠ 前置条件：** 步骤 6 必须已完成（所有容器镜像和 Helm Chart 已推送至中国区 ECR）。否则 `terraform apply` 将因无法拉取镜像/Chart 而失败。
 
 ```bash
 cd ~/eks/terraform
@@ -852,9 +930,10 @@ bash eks/scripts/build-and-mirror.sh \
 | 文件 | 大小（约） | 说明 |
 |------|-----------|------|
 | `openclaw-eks-project.tar.gz` | ~5 MB | Terraform、Helm chart、脚本 |
-| `core-images.tar.gz` | ~1 GB | OpenClaw + operator + 基础镜像 |
+| `core-images.tar.gz` | ~1 GB | OpenClaw + operator + busybox + 基础镜像 |
 | `sidecar-images.tar.gz` | ~100 MB | 可选 sidecar（不含 ollama） |
 | `admin-console.tar.gz` | ~140 MB | 管理控制台 Docker 镜像 |
+| `openclaw-operator-0.26.2.tgz` | ~50 KB | Operator Helm Chart OCI 制品 |
 | **合计** | **~1.3 GB** | |
 
 > `ollama/ollama` 镜像（~3.4 GB）体积过大，建议仅在需要本地 LLM 推理时单独传输。

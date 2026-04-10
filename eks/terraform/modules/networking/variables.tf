@@ -41,6 +41,14 @@ variable "enable_cloudfront" {
   default     = false
 }
 
+# --- Chart Repository ---------------------------------------------------------
+
+variable "chart_repository" {
+  description = "Override Helm chart repository for ALB controller. Empty = default (aws.github.io for global, public.ecr.aws for China)."
+  type        = string
+  default     = ""
+}
+
 # --- Region / Partition -------------------------------------------------------
 
 variable "is_china_region" {
