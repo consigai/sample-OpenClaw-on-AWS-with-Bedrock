@@ -69,7 +69,8 @@ body { font-family:'DM Sans',system-ui,sans-serif; background:var(--bg); color:v
   content:''; position:absolute; left:-6px; top:50%; transform:translateY(-50%);
   width:3px; height:20px; background:var(--primary); border-radius:0 3px 3px 0;
 }
-.rail-icon { font-size:18px; line-height:1; }
+.rail-icon { width:20px; height:20px; display:flex; align-items:center; justify-content:center; }
+.rail-icon svg { width:18px; height:18px; }
 .rail-text { font-size:8.5px; font-weight:500; text-align:center; line-height:1.2; max-width:64px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 /* ═══ MAIN CONTENT ═══ */
@@ -234,40 +235,65 @@ let lang = 'en';
 let activePage = 'arch';
 
 // ═══ NAVIGATION STRUCTURE ═══
+// SVG line icons (simple, clean)
+const I = {
+  arch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 21h18M9 21V7l-4 4M15 21V7l4 4M12 21V3"/></svg>',
+  deploy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v14m0 0l-4-4m4 4l4-4M4 18v2h16v-2"/></svg>',
+  login: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/><circle cx="12" cy="16" r="1"/></svg>',
+  dash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="4" rx="1"/><rect x="3" y="14" width="7" height="4" rx="1"/><rect x="14" y="11" width="7" height="7" rx="1"/></svg>',
+  org: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="17" r="3"/><circle cx="19" cy="17" r="3"/><path d="M12 8v4M8 14l4-2m0 0l4 2"/></svg>',
+  soul: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2"/><path d="M12 6v6l4 2"/></svg>',
+  bot: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="14" r="1.5"/><circle cx="15" cy="14" r="1.5"/><path d="M12 4v4M8 4h8"/></svg>',
+  puzzle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7h3a2 2 0 100-4h0a2 2 0 100 4h3v3a2 2 0 104 0V7h3a2 2 0 110 4h0a2 2 0 110-4v3h-3a2 2 0 10-4 0h0a2 2 0 104 0v3H7v-3a2 2 0 10-4 0h0a2 2 0 114 0V7z"/></svg>',
+  book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M4 4.5A2.5 2.5 0 016.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15z"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>',
+  shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+  monitor: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+  audit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2"/></svg>',
+  dollar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>',
+  phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>',
+  user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  tools: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>',
+  ghost: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a8 8 0 00-8 8v12l3-3 2 2 3-3 3 3 2-2 3 3V10a8 8 0 00-8-8z"/><circle cx="9" cy="10" r="1.5" fill="currentColor"/><circle cx="15" cy="10" r="1.5" fill="currentColor"/></svg>',
+  wrench: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>',
+  coin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9.5c0-1.38-1.34-2.5-3-2.5s-3 1.12-3 2.5S10.34 12 12 12s3 1.12 3 2.5-1.34 2.5-3 2.5"/></svg>',
+};
+
 const NAV = [
   { group: { en: 'Start', zh: '开始' }, items: [
-    { id:'arch', icon:'🏗', en:'Architecture', zh:'架构' },
-    { id:'deploy', icon:'🚀', en:'Deploy', zh:'部署' },
-    { id:'login', icon:'🔑', en:'Login', zh:'登录' },
+    { id:'arch', icon:I.arch, en:'Architecture', zh:'架构' },
+    { id:'deploy', icon:I.deploy, en:'Deploy', zh:'部署' },
+    { id:'login', icon:I.login, en:'Login', zh:'登录' },
   ]},
   { group: { en: 'Admin', zh: '管理' }, items: [
-    { id:'dashboard', icon:'📊', en:'Dashboard', zh:'仪表盘' },
-    { id:'dept', icon:'🏢', en:'Departments', zh:'部门' },
-    { id:'pos', icon:'🧬', en:'Positions', zh:'岗位' },
-    { id:'emp', icon:'👥', en:'Employees', zh:'员工' },
-    { id:'soul', icon:'🧠', en:'SOUL Editor', zh:'SOUL' },
-    { id:'agents', icon:'🤖', en:'Agent Factory', zh:'Agent' },
-    { id:'skills', icon:'🧩', en:'Skills', zh:'技能' },
-    { id:'kb', icon:'📚', en:'Knowledge', zh:'知识库' },
-    { id:'im', icon:'💬', en:'IM Channels', zh:'IM 通道' },
-    { id:'sec', icon:'🛡', en:'Security', zh:'安全' },
-    { id:'monitor', icon:'📡', en:'Monitor', zh:'监控' },
-    { id:'audit', icon:'📋', en:'Audit', zh:'审计' },
-    { id:'usage', icon:'💰', en:'Usage', zh:'用量' },
-    { id:'playground', icon:'🎮', en:'Playground', zh:'测试' },
-    { id:'settings', icon:'⚙', en:'Settings', zh:'设置' },
+    { id:'dashboard', icon:I.dash, en:'Dashboard', zh:'仪表盘' },
+    { id:'org', icon:I.org, en:'Organization', zh:'组织架构' },
+    { id:'soul', icon:I.soul, en:'SOUL Editor', zh:'SOUL' },
+    { id:'agents', icon:I.bot, en:'Agent Factory', zh:'Agent' },
+    { id:'skills', icon:I.puzzle, en:'Skills', zh:'技能' },
+    { id:'kb', icon:I.book, en:'Knowledge', zh:'知识库' },
+    { id:'im', icon:I.chat, en:'IM Channels', zh:'IM 通道' },
+    { id:'sec', icon:I.shield, en:'Security', zh:'安全' },
+    { id:'monitor', icon:I.monitor, en:'Monitor', zh:'监控' },
+    { id:'audit', icon:I.audit, en:'Audit', zh:'审计' },
+    { id:'usage', icon:I.dollar, en:'Usage', zh:'用量' },
+    { id:'playground', icon:I.play, en:'Playground', zh:'测试' },
+    { id:'settings', icon:I.gear, en:'Settings', zh:'设置' },
   ]},
   { group: { en: 'Employee', zh: '员工' }, items: [
-    { id:'portal-chat', icon:'💭', en:'Chat', zh:'对话' },
-    { id:'portal-im', icon:'📱', en:'Connect IM', zh:'连接IM' },
-    { id:'portal-profile', icon:'👤', en:'Profile', zh:'档案' },
-    { id:'portal-skills', icon:'🔧', en:'My Skills', zh:'技能' },
-    { id:'portal-usage', icon:'📈', en:'My Usage', zh:'用量' },
-    { id:'portal-twin', icon:'👻', en:'Twin', zh:'分身' },
+    { id:'portal-chat', icon:I.chat, en:'Chat', zh:'对话' },
+    { id:'portal-im', icon:I.phone, en:'Connect IM', zh:'连接IM' },
+    { id:'portal-profile', icon:I.user, en:'Profile', zh:'档案' },
+    { id:'portal-skills', icon:I.tools, en:'My Skills', zh:'技能' },
+    { id:'portal-usage', icon:I.chart, en:'My Usage', zh:'用量' },
+    { id:'portal-twin', icon:I.ghost, en:'Twin', zh:'分身' },
   ]},
   { group: { en: 'Reference', zh: '参考' }, items: [
-    { id:'troubleshoot', icon:'🔧', en:'Fix Issues', zh:'故障排除' },
-    { id:'costs', icon:'💵', en:'Costs', zh:'成本' },
+    { id:'troubleshoot', icon:I.wrench, en:'Fix Issues', zh:'故障排除' },
+    { id:'costs', icon:I.coin, en:'Costs', zh:'成本' },
   ]},
 ];
 
@@ -368,11 +394,9 @@ login: {
 
 dashboard: { en:{title:'Dashboard',sub:'Command center — setup checklist, stats, quick actions.'}, zh:{title:'仪表盘',sub:'指挥中心 — 配置清单、统计、快捷操作。'}, body(){ return intent('The dashboard gives first-time admins a <strong>clear roadmap</strong> via the setup checklist, and experienced admins a <strong>real-time pulse</strong> via stat cards. One screen to know if everything is OK.','仪表盘通过设置清单给首次管理员<strong>清晰路线图</strong>，通过统计卡片给有经验管理员<strong>实时脉搏</strong>。一个屏幕知道一切是否正常。') + note('info','📍',t('<strong>Navigate:</strong> Sidebar → Dashboard. Shows: setup progress, employee/agent/session counts, system health indicators.','<strong>导航：</strong>侧边栏 → Dashboard。显示：设置进度、员工/Agent/会话数、系统健康指标。')); }},
 
-dept: { en:{title:'Department Structure',sub:'Org hierarchy — the isolation boundary.'}, zh:{title:'部门管理',sub:'组织层级 — 隔离边界。'}, body(){ return intent('Departments are the <strong>top-level isolation boundary</strong>. Like physical office floors, they separate teams so a Sales agent cannot access Engineering knowledge bases. Managers only see agents within their scope.','部门是<strong>顶层隔离边界</strong>。就像大楼楼层，部门将团队分开：销售 Agent 无法访问工程知识库。经理只看到其管辖范围的 Agent。') + steps(t('How to manage:','如何管理：'),t(['Organization → Department Tree','Click "Add Department". Set parent for sub-departments.','Drag to reorder. Each shows headcount and active agents.','Cascading: deleting a parent moves children to root.'],['Organization → Department Tree','点击"添加部门"。设置上级部门创建子部门。','拖拽排序。每个显示人数和活跃 Agent。','级联：删除上级会将子部门移到根级别。'])); }},
+org: { en:{title:'Organization Management',sub:'Departments → Positions → Employees — the foundation of agent governance.'}, zh:{title:'组织架构管理',sub:'部门 → 岗位 → 员工 — Agent 治理的基础。'}, body(){ return intent('The organization module has three layers mirroring your real company. <strong>Departments</strong> = isolation boundaries. <strong>Positions</strong> = Agent DNA (SOUL + skills + tools + permissions). <strong>Employees</strong> = auto-provisioned. Assign position → agent created with everything inherited. You manage <strong>10 positions instead of 500 agents</strong>.','组织模块有三层映射真实公司。<strong>部门</strong> = 隔离边界。<strong>岗位</strong> = Agent DNA（SOUL + 技能 + 工具 + 权限）。<strong>员工</strong> = 自动配置。分配岗位 → Agent 自动创建并继承一切。您管理<strong>10 个岗位而非 500 个 Agent</strong>。') + sectionHead(t('Departments','部门')) + note('info','📍',t('<strong>Organization → Departments.</strong> Hierarchy tree with headcount. Managers only see their department scope.','<strong>Organization → Departments。</strong>层级树含人数。经理只看到自己部门范围。')) + sectionHead(t('Positions — Agent DNA','岗位 — Agent DNA')) + steps(t('Operations:','操作：'),t(['Organization → Positions. Each shows member count + SOUL status.','Click position → SOUL tab → write role behavior.','Skills & Tools tab → assign tool permissions per role.','Positions with "Empty" SOUL need attention.'],['Organization → Positions。每个显示成员数 + SOUL 状态。','点击岗位 → SOUL 标签 → 编写角色行为。','Skills & Tools 标签 → 分配各角色工具权限。','标记"Empty"SOUL 的岗位需要配置。'])) + sectionHead(t('Employees — Auto-Provisioning','员工 — 自动配置')) + steps(t('Operations:','操作：'),t(['Organization → Employees. All with position, channels, agent status.','Add Employee → select position → auto-provisioned (Serverless).','Each gets 1:1 agent binding. Upgrade to Always-on later if needed.','Click employee → edit personal SOUL, view IM channels.'],['Organization → Employees。显示岗位、通道、Agent 状态。','添加员工 → 选择岗位 → 自动配置（Serverless）。','每个获得 1:1 Agent 绑定。需要时可升级为 Always-on。','点击员工 → 编辑个人 SOUL，查看 IM 通道。'])) + note('tip','💡',t('<strong>Value:</strong> 50 new hires → assign to position → 50 agents instantly with correct SOUL, skills, permissions. Zero manual config.','<strong>价值：</strong>50 名新员工 → 分配岗位 → 50 个 Agent 立即拥有正确的 SOUL、技能、权限。零手动配置。')); }},
 
-pos: { en:{title:'Positions — Agent DNA',sub:'SOUL template + skills + tools + permissions per role.'}, zh:{title:'岗位管理 — Agent 的 DNA',sub:'每个角色的 SOUL 模板 + 技能 + 工具 + 权限。'}, body(){ return intent('A Position is a <strong>job description for AI agents</strong>. SOUL template, default skills, knowledge bases, tool permissions — all inherited when you assign an employee. <strong>Change position once → every agent in that role updates.</strong> Managing 5 agents vs 500.','岗位是 <strong>AI Agent 的岗位说明书</strong>。SOUL 模板、默认技能、知识库、工具权限 — 分配员工时全部继承。<strong>修改一次岗位 → 该角色所有 Agent 更新。</strong>管理 5 个和 500 个的区别。') + steps(t('Operations:','操作：'),t(['Organization → Positions. Each shows member count + SOUL status.','Click position → SOUL tab → write role behavior.','Skills & Tools tab → assign tool permissions (shell, browser, file).','Positions with "Empty" SOUL need attention.'],['Organization → Positions。每个显示成员数 + SOUL 状态。','点击岗位 → SOUL 标签 → 编写角色行为。','Skills & Tools 标签 → 分配工具权限（shell、browser、file）。','标记"Empty"SOUL 的岗位需要配置。'])); }},
 
-emp: { en:{title:'Employee Management',sub:'Assign → agents auto-provisioned.'}, zh:{title:'员工管理',sub:'分配 → Agent 自动配置。'}, body(){ return intent('Each employee maps 1:1 to an agent. <strong>Auto-provisioning:</strong> assign position → platform creates agent, binding, workspace. Like onboarding: give a role → laptop + badge + training materials.','每个员工 1:1 对应 Agent。<strong>自动配置：</strong>分配岗位 → 平台创建 Agent、绑定和工作区。像入职：给角色 → 自动获得笔记本、门禁、培训。') + steps(t('Operations:','操作：'),t(['Organization → Employees. All with position, channels, agent status.','Add Employee → select position → auto-provisioned (Serverless).','Each gets 1:1 binding. Can upgrade to Always-on later.','Click employee → edit personal SOUL, view IM channels.'],['Organization → Employees。显示岗位、通道、Agent 状态。','添加员工 → 选择岗位 → 自动配置（Serverless）。','每个获得 1:1 绑定。可后续升级为 Always-on。','点击员工 → 编辑个人 SOUL，查看 IM 通道。'])); }},
 
 soul: { en:{title:'SOUL Editor — 3-Layer Identity',sub:'Global → Position → Personal = what agent reads.'}, zh:{title:'SOUL 编辑器 — 三层身份',sub:'全局 → 岗位 → 个人 = Agent 读取的内容。'}, body(){ return intent('SOUL defines <strong>who the agent is</strong>. Three layers: Global (company constitution, IT-locked), Position (department handbook, dept-managed), Personal (desk setup, employee-editable). Each layer adds specificity without overriding the one above.','SOUL 定义<strong>Agent 是谁</strong>。三层：全局（公司章程，IT 锁定）、岗位（部门手册，部门管理）、个人（办公桌布置，员工可编辑）。每层增加具体性而不覆盖上层。') + flow(['🔒 Global\n'+t('IT locked','IT 锁定'),'d','✏️ Position\n'+t('Dept managed','部门管理'),'p','✏️ Personal\n'+t('Employee edits','员工编辑'),'s','= Merged\n'+t('Agent reads','Agent 读取'),'c']) + note('info','📍',t('<strong>Global:</strong> Security Center → Policies → Edit Global SOUL<br><strong>Position:</strong> Organization → Positions → click → SOUL tab<br><strong>Personal:</strong> Agent Factory → click agent → Personal tab','<strong>全局：</strong>Security Center → Policies → Edit Global SOUL<br><strong>岗位：</strong>Organization → Positions → 点击 → SOUL 标签<br><strong>个人：</strong>Agent Factory → 点击 Agent → Personal 标签'))
 + deep(`
@@ -566,7 +590,7 @@ costs: { en:{title:'Cost Estimates',sub:'Monthly breakdown for a typical deploym
 function t(en, zh) { return lang === 'en' ? en : zh; }
 
 function intent(en, zh) {
-  return `<div class="intent" onclick="this.classList.toggle('closed')"><div class="intent-head">💡 ${t('Design Intent','设计意图')}</div><div class="intent-body">${t(en,zh)}</div></div>`;
+  return `<div class="intent"><div class="intent-head" onclick="this.parentElement.classList.toggle('closed')">💡 ${t('Design Intent','设计意图')}</div><div class="intent-body">${t(en,zh)}</div></div>`;
 }
 
 function sectionHead(text) {
@@ -593,7 +617,7 @@ function flow(items) {
 }
 
 function deep(en, zh) {
-  return `<div class="deep" onclick="this.classList.toggle('open')"><div class="deep-head">🔬 ${t('Technical Deep Dive','技术深潜')}</div><div class="deep-body">${t(en,zh)}</div></div>`;
+  return `<div class="deep"><div class="deep-head" onclick="this.parentElement.classList.toggle('open')">🔬 ${t('Technical Details','技术细节')}</div><div class="deep-body">${t(en,zh)}</div></div>`;
 }
 
 function steps(title, items) {
