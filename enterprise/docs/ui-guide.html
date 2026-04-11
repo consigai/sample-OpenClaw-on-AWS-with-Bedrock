@@ -696,17 +696,174 @@ agents: { en:{title:'Agent Factory',sub:'Fleet management — status, models, qu
       '<h4>AGENT# 表结构</h4><div class="code">SK: AGENT#{agent_id}\n字段: id, name, employeeId, positionId, channels[], skills[],\n      status, deployMode, qualityScore, soulVersions</div><h4>部署模式</h4><p><strong>Serverless</strong>（默认）：Firecracker VM，约 6 秒冷启动。<strong>Always-on</strong>：ECS Fargate + EFS，即时响应，约 $50/月。</p><h4>⚠️ 自审</h4><ul style="font-size:12px;color:var(--text-s);line-height:1.8"><li><strong>模式切换需手动启动</strong></li><li><strong>质量分是种子默认值</strong></li><li><strong>技能是岗位级别的</strong></li></ul>'
     ); }},
 
-skills: { en:{title:'Skill Market',sub:'3-layer skill system: built-in → S3 hot-load → pre-built bundles. Assigned to positions, not individuals.'}, zh:{title:'技能市场',sub:'三层技能系统：内置 → S3 热加载 → 预构建包。分配给岗位而非个人。'}, body(){ return intent(
+skills: { en:{title:'Skill Market — Agent App Store',sub:'3-layer skill system: Docker built-in → S3 hot-load → SSM bundles. Position-level assignment, role-based filtering, API key injection.'}, zh:{title:'技能市场 — Agent 应用商店',sub:'三层技能系统：Docker 内置 → S3 热加载 → SSM 预构建包。岗位级分配、角色过滤、API Key 注入。'}, body(){ return intent(
       t(
-        '<strong>Why position-level skill assignment?</strong> Skills are like apps on a phone. Assigning individually to 500 agents = 500 configuration tasks. Assigning to 10 positions = 10 tasks. When you assign "CRM Query" to "Account Executive" position, all 50 AE agents get it. AWS-native skills (Bedrock KB Search, Nova Canvas, SES Mailer) use IAM roles — <strong>zero API key configuration</strong>. Third-party skills (GitHub, Jira) need API keys stored in SSM Parameter Store.',
-        '<strong>为什么岗位级技能分配？</strong>技能像手机应用。给 500 个 Agent 单独分配 = 500 个配置任务。给 10 个岗位分配 = 10 个任务。为"客户经理"岗位分配"CRM 查询"→ 50 个 AE Agent 全部获得。AWS 原生技能用 IAM 角色——<strong>零 API Key 配置</strong>。第三方技能需要存储在 SSM 的 API Key。'
+        '<strong>Why not just let every agent use every tool?</strong> Two reasons: <strong>cost</strong> and <strong>security</strong>. Third-party skills like Jira, GitHub, Salesforce need API keys — giving all 500 agents access to your Salesforce API key means 500 potential leak points. Position-level assignment means: only the 20 Sales agents get CRM access, only the 30 Engineers get GitHub. AWS-native skills (Bedrock KB Search, Nova Canvas, SES Mailer) use IAM roles — <strong>zero API key management</strong>, the EC2 instance role provides access. The 3-layer architecture balances cold-start speed (Layer 1 pre-built in Docker) with flexibility (Layer 2 hot-loaded from S3 without image rebuild).',
+        '<strong>为什么不让每个 Agent 使用所有工具？</strong>两个原因：<strong>成本</strong>和<strong>安全</strong>。第三方技能如 Jira、GitHub、Salesforce 需要 API Key——给 500 个 Agent 访问你的 Salesforce API Key 意味着 500 个潜在泄露点。岗位级分配意味着：只有 20 个销售 Agent 获得 CRM 访问，只有 30 个工程师获得 GitHub。AWS 原生技能（Bedrock KB Search、Nova Canvas、SES Mailer）使用 IAM 角色——<strong>零 API Key 管理</strong>，EC2 实例角色提供访问。三层架构平衡冷启动速度（Layer 1 预构建在 Docker 中）和灵活性（Layer 2 从 S3 热加载无需重建镜像）。'
       )
     )
-    + steps(t('Assign skills:','分配技能：'),t(['Skill Market → browse 26 skills.','Click skill → check prerequisites (API key or IAM).','Select position → "Assign". All agents in that position get it.','AWS-native skills = zero config.'],['技能市场 → 浏览 26 个技能。','点击技能 → 检查前置条件。','选择岗位 → "分配"。该岗位所有 Agent 获得。','AWS 原生技能 = 零配置。']))
+    + sectionHead(t('How to Assign Skills','如何分配技能'))
+    + steps(t('Operations:','操作：'),t([
+      '<strong>Skill Market</strong> (sidebar) → browse 26 available skills. Each shows: name, category, layer (L1/L2), required prerequisites.',
+      'Click a skill → <strong>Step 1: Prerequisites.</strong> AWS-native skills show "IAM Role" (zero config). Third-party show "API Key Required" — must be added to SSM first.',
+      '<strong>Step 2: Assign to Position.</strong> Select a position (e.g. "Account Executive") → click "Assign". All agents in that position get the skill on their next session.',
+      'To add API keys: Settings → API Key Vault, or SSM Parameter Store path: <code>/openclaw/{stack}/skill-keys/{skill_name}/{ENV_VAR}</code>.'
+    ],[
+      '<strong>Skill Market</strong>（侧边栏）→ 浏览 26 个可用技能。每个显示：名称、分类、层级（L1/L2）、前置条件。',
+      '点击技能 → <strong>步骤 1：前置条件。</strong>AWS 原生技能显示"IAM Role"（零配置）。第三方显示"需要 API Key"——必须先添加到 SSM。',
+      '<strong>步骤 2：分配给岗位。</strong>选择岗位 → 点击"分配"。该岗位所有 Agent 在下次会话获得技能。',
+      '添加 API Key：Settings → API Key Vault，或 SSM 路径：<code>/openclaw/{stack}/skill-keys/{skill_name}/{ENV_VAR}</code>。'
+    ]))
     + deep(
-      '<h4>3-Layer Skill Architecture</h4><table class="tbl"><tr><th>Layer</th><th>Source</th><th>Loaded When</th><th>Examples</th></tr><tr><td>L1 Built-in</td><td>Docker image</td><td>Always available</td><td>jina-reader, deep-research, web-search</td></tr><tr><td>L2 S3 Hot-load</td><td>s3://{bucket}/_shared/skills/</td><td>Container startup (skill_loader.py)</td><td>crm-query, sap-connector</td></tr><tr><td>L3 Bundles</td><td>SSM catalog → S3 tar.gz</td><td>Container startup</td><td>Custom enterprise skills</td></tr></table><h4>Skill Manifest (skill.json)</h4><div class="code">{\n  "name": "crm-query",\n  "requires": { "env": ["CRM_API_KEY"] },\n  "permissions": {\n    "allowedRoles": ["sales","csm","management"]\n  }\n}</div><h4>API Key Injection</h4><p>SSM: <code>/openclaw/{stack}/skill-keys/{skill}/{env_var}</code>. Written to <code>/tmp/skill_env.sh</code> as <code>export KEY=VALUE</code>. Loaded by server.py before each invocation.</p><h4>⚠️ Self-Audit</h4><ul style="font-size:12px;color:var(--text-s);line-height:1.8"><li><strong>No audit log for filtered skills:</strong> skill_loader silently skips blocked skills without logging.</li><li><strong>API keys in SSM are not rotated:</strong> No built-in key rotation. Manual SSM update + container restart required.</li><li><strong>Layer 1 skills baked into Docker image:</strong> Adding new built-in skills requires image rebuild + AgentCore Runtime update.</li></ul>',
-      '<h4>三层技能架构</h4><table class="tbl"><tr><th>层</th><th>来源</th><th>加载时机</th><th>示例</th></tr><tr><td>L1 内置</td><td>Docker 镜像</td><td>始终可用</td><td>jina-reader, deep-research</td></tr><tr><td>L2 S3</td><td>s3://_shared/skills/</td><td>容器启动</td><td>crm-query, sap-connector</td></tr><tr><td>L3 包</td><td>SSM → S3 tar.gz</td><td>容器启动</td><td>企业自定义技能</td></tr></table><h4>技能清单 (skill.json)</h4><div class="code">{\n  "name": "crm-query",\n  "requires": { "env": ["CRM_API_KEY"] },\n  "permissions": { "allowedRoles": ["sales","csm"] }\n}</div><h4>⚠️ 自审</h4><ul style="font-size:12px;color:var(--text-s);line-height:1.8"><li><strong>过滤技能无审计日志</strong></li><li><strong>SSM API Key 无自动轮换</strong></li><li><strong>L1 技能烘焙在镜像中：</strong>添加新内置技能需重建镜像。</li></ul>'
+t(`<h4>The 3-Layer Skill Architecture</h4>
+<p>Skills extend what an agent can do beyond basic conversation. The 3-layer system balances startup speed, flexibility, and customization:</p>
+<table class="tbl">
+<tr><th>Layer</th><th>Where Skills Live</th><th>When Loaded</th><th>Cold Start Impact</th><th>How to Add</th><th>Examples</th></tr>
+<tr><td><strong>L1 Built-in</strong></td><td>Baked into Docker image at build time</td><td>Always available (0s)</td><td>None</td><td>Add to Dockerfile ARG SKILLS_PREINSTALL, rebuild image</td><td>jina-reader, deep-research, web-search, summarize, github, notion</td></tr>
+<tr><td><strong>L2 S3 Hot-load</strong></td><td>S3: <code>_shared/skills/{name}/skill.json</code></td><td>Container startup (~2s)</td><td>Minimal</td><td>Upload skill.json to S3 via seed_skills_final.py or Admin Console</td><td>crm-query, sap-connector, excel-gen, jira-query</td></tr>
+<tr><td><strong>L3 Pre-built Bundles</strong></td><td>SSM catalog → S3 tar.gz</td><td>Container startup (~5s)</td><td>Moderate (download + extract)</td><td>Upload tar.gz to S3, register in SSM catalog</td><td>Custom enterprise skills with dependencies</td></tr>
+</table>
+
+<h4>Skill Loading Process (skill_loader.py)</h4>
+<p>File: <code>enterprise/agent-container/skill_loader.py</code> (283 lines). Runs inside the AgentCore container at startup, invoked by entrypoint.sh.</p>
+<div class="code">Container starts → entrypoint.sh calls:
+  python skill_loader.py --tenant TENANT_ID --workspace /tmp/workspace \\
+    --bucket openclaw-tenants-xxx --stack openclaw-demo --region us-east-1
+
+Flow:
+  1. Read tenant roles from DynamoDB (EMP#→positionId→role name)
+  2. Layer 1: Already in Docker image at /root/.openclaw/skills/ (instant)
+  3. Layer 2: aws s3 sync s3://{bucket}/_shared/skills/ → /tmp/skills/
+     For each skill: read skill.json → check permissions → copy to workspace
+  4. Layer 3: Read SSM catalog → download tar.gz → extract to workspace
+  5. API Key injection: read from SSM → write /tmp/skill_env.sh
+  6. server.py sources /tmp/skill_env.sh before each invocation</div>
+
+<h4>Skill Manifest Format (skill.json)</h4>
+<div class="code">{
+  "name": "crm-query",
+  "description": "Query customer data from CRM system",
+  "category": "business",
+  "requires": {
+    "env": ["CRM_API_KEY", "CRM_ENDPOINT"]   // Required environment variables
+  },
+  "permissions": {
+    "allowedRoles": ["sales", "csm", "management"],  // Who can use this skill
+    "blockedRoles": ["intern"]                         // Explicit deny list
+  },
+  "awsService": null  // If set (e.g., "s3"), uses IAM role — no API key needed
+}</div>
+
+<h4>Permission Filtering Logic</h4>
+<p>skill_loader.py evaluates each skill against the tenant's role:</p>
+<div class="code">For each skill in S3:
+  1. Read skill.json → permissions.allowedRoles, blockedRoles
+  2. If tenant's role in blockedRoles → DENY (skip silently)
+  3. If "*" in allowedRoles → ALLOW (everyone gets it)
+  4. If tenant's role in allowedRoles → ALLOW
+  5. Otherwise → DENY (skip silently)
+
+Example:
+  Skill: crm-query, allowedRoles: ["sales","csm","management"]
+  Tenant: emp-mike (pos-ae → role "ae" maps to "sales")
+  → ALLOW: skill copied to workspace
+
+  Tenant: emp-ryan (pos-sde → role "sde" maps to "engineering")
+  → DENY: skill not copied</div>
+
+<h4>API Key Injection</h4>
+<p>Third-party skills need API keys. They're stored in SSM Parameter Store (SecureString) and injected at container startup:</p>
+<div class="code">SSM paths:
+  /openclaw/{stack}/skill-keys/{skill_name}/{env_var}
+  /openclaw/{stack}/skill-keys/_global/{env_var}    ← shared across skills
+
+Example:
+  /openclaw/openclaw-demo/skill-keys/crm-query/CRM_API_KEY = "sk_live_xxx"
+  /openclaw/openclaw-demo/skill-keys/_global/OPENAI_API_KEY = "sk-xxx"
+
+skill_loader.py reads all keys → writes to /tmp/skill_env.sh:
+  export CRM_API_KEY='sk_live_xxx'
+  export CRM_ENDPOINT='https://api.salesforce.com'
+
+server.py sources this file before each openclaw agent invocation,
+so the agent process has all required env vars.</div>
+
+<h4>How Seed Data Creates the Skill Catalog</h4>
+<p>File: <code>enterprise/admin-console/server/seed_skills_final.py</code>. Uploads 26 skill.json manifests to S3 <code>_shared/skills/{name}/skill.json</code> with role assignments:</p>
+<div class="code">L1 web-search          → ALL roles
+L1 jina-reader         → ALL roles
+L1 deep-research       → ALL roles
+L1 github              → engineering, devops, qa
+L2 jira-query          → engineering, product, qa, management
+L2 crm-query           → sales, csm, management
+L2 sap-connector       → finance, management
+L2 excel-gen           → finance, management, hr
+L2 aws-ses-mailer      → sales, csm, hr, management
+L2 aws-nova-canvas     → sales, csm, product, management
+L1 skill-vetter        → engineering, devops, management</div>
+
+<h4>⚠️ Self-Audit: Skill System Design Considerations</h4>
+<ul style="font-size:12px;color:var(--text-s);line-height:1.8">
+<li><strong>Filtered skills have no audit log:</strong> When skill_loader.py denies a skill (role not allowed), it silently skips without logging. An admin has no visibility into which skills were filtered for which tenants. Consider: adding audit events for filtered skills.</li>
+<li><strong>API keys in SSM are not auto-rotated:</strong> Once stored, keys persist until manually updated. If a key is compromised, admin must: update SSM → container restart (or wait for session expiry). No built-in rotation mechanism.</li>
+<li><strong>Layer 1 skills are baked into Docker image:</strong> Adding a new built-in skill requires: modify Dockerfile SKILLS_PREINSTALL → rebuild image on EC2 → push to ECR → update AgentCore Runtime. This takes ~15 minutes. Layer 2 (S3) avoids this — upload skill.json and it's available on next session.</li>
+<li><strong>Role name mapping is implicit:</strong> "pos-ae" → role "ae" → maps to "sales" in skill manifest allowedRoles. The mapping is in the skill.json file, not in a central config. Different skill authors may use different role names for the same position.</li>
+<li><strong>skill_loader runs at container startup, not per-request:</strong> If admin assigns a new skill to a position while a session is active, the agent won't see it until next session. Serverless: natural (new VM = new load). Always-on: container restart needed.</li>
+</ul>`
+,
+`<h4>三层技能架构</h4>
+<p>技能扩展 Agent 的对话以外的能力。三层系统平衡启动速度、灵活性和自定义：</p>
+<table class="tbl">
+<tr><th>层</th><th>技能位置</th><th>加载时机</th><th>冷启动影响</th><th>添加方式</th><th>示例</th></tr>
+<tr><td><strong>L1 内置</strong></td><td>Docker 镜像中</td><td>始终可用（0 秒）</td><td>无</td><td>修改 Dockerfile，重建镜像</td><td>jina-reader, deep-research, web-search</td></tr>
+<tr><td><strong>L2 S3 热加载</strong></td><td>S3: <code>_shared/skills/{name}/skill.json</code></td><td>容器启动（约 2 秒）</td><td>极小</td><td>上传 skill.json 到 S3</td><td>crm-query, sap-connector, excel-gen</td></tr>
+<tr><td><strong>L3 预构建包</strong></td><td>SSM 目录 → S3 tar.gz</td><td>容器启动（约 5 秒）</td><td>中等</td><td>上传 tar.gz + 注册 SSM</td><td>有依赖的企业自定义技能</td></tr>
+</table>
+
+<h4>技能加载过程 (skill_loader.py)</h4>
+<p>文件：<code>enterprise/agent-container/skill_loader.py</code>（283 行）。在 AgentCore 容器启动时运行。</p>
+<div class="code">容器启动 → entrypoint.sh 调用:
+  python skill_loader.py --tenant TENANT_ID --workspace /tmp/workspace ...
+
+流程:
+  1. 从 DynamoDB 读取租户角色（EMP#→positionId→角色名）
+  2. Layer 1: 已在 Docker 镜像中（即时）
+  3. Layer 2: 从 S3 同步 → 读取 skill.json → 检查权限 → 复制到工作区
+  4. Layer 3: 读取 SSM 目录 → 下载 tar.gz → 解压到工作区
+  5. API Key 注入: 从 SSM 读取 → 写入 /tmp/skill_env.sh
+  6. server.py 在每次调用前 source /tmp/skill_env.sh</div>
+
+<h4>技能清单格式 (skill.json)</h4>
+<div class="code">{
+  "name": "crm-query",
+  "requires": { "env": ["CRM_API_KEY"] },    // 必需环境变量
+  "permissions": {
+    "allowedRoles": ["sales","csm"],          // 谁能用
+    "blockedRoles": ["intern"]                 // 显式拒绝
+  }
+}</div>
+
+<h4>权限过滤逻辑</h4>
+<div class="code">对每个 S3 中的技能:
+  1. 读取 skill.json → allowedRoles, blockedRoles
+  2. 租户角色在 blockedRoles → 拒绝（静默跳过）
+  3. allowedRoles 有 "*" → 允许所有人
+  4. 租户角色在 allowedRoles → 允许
+  5. 否则 → 拒绝</div>
+
+<h4>API Key 注入</h4>
+<p>SSM 路径：<code>/openclaw/{stack}/skill-keys/{skill_name}/{env_var}</code>。全局密钥：<code>_global/{env_var}</code>。写入 <code>/tmp/skill_env.sh</code> 为 <code>export KEY=VALUE</code>。server.py 在每次调用前加载。</p>
+
+<h4>⚠️ 自审：技能系统设计注意事项</h4>
+<ul style="font-size:12px;color:var(--text-s);line-height:1.8">
+<li><strong>过滤技能无审计日志：</strong>skill_loader 静默跳过被拒绝的技能。管理员无法看到哪些技能被过滤。</li>
+<li><strong>SSM API Key 无自动轮换：</strong>存储后持续存在直到手动更新。密钥泄露需：更新 SSM → 容器重启。</li>
+<li><strong>L1 技能烘焙在 Docker 镜像：</strong>添加新内置技能需重建镜像（约 15 分钟）。L2（S3）避免此问题。</li>
+<li><strong>角色名映射是隐式的：</strong>"pos-ae" → "ae" → skill.json 中的 "sales"。不同技能作者可能对同一岗位用不同角色名。</li>
+<li><strong>skill_loader 在容器启动时运行，非每次请求：</strong>活跃会话期间分配新技能不会立即生效。Serverless：自然解决（新 VM）。Always-on：需重启容器。</li>
+</ul>`)
     ); }},
+
 
 kb: { en:{title:'Knowledge Base',sub:'Company library — upload docs, assign to positions, agents use file tool to read them.'}, zh:{title:'知识库',sub:'公司图书馆 — 上传文档，分配给岗位，Agent 用 file 工具读取。'}, body(){ return intent(
       t(
