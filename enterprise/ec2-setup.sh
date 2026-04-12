@@ -196,7 +196,7 @@ if [ -n "${SLACK_BOT_TOKEN:-}" ] && [ -n "${SLACK_APP_TOKEN:-}" ]; then
     set -o allexport
     . /etc/openclaw/env
     set +o allexport
-    openclaw channels add --channel slack --use-env
+    openclaw channels add --channel slack --bot-token "$SLACK_BOT_TOKEN" --app-token "$SLACK_APP_TOKEN"
   ' || echo "  WARN: Slack channel configuration failed"
 fi
 
