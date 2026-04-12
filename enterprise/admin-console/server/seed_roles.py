@@ -5,14 +5,9 @@ import boto3
 
 ORG = "ORG#acme"
 
-# Role assignments per design doc
 ROLES = {
-    "emp-jiade": "admin",    # JiaDe Wang — IT Admin (SA lead)
-    "emp-chris": "admin",    # Chris Morgan — DevOps lead, also admin
-    "emp-alex":  "manager",  # Alex Rivera — Product dept head
-    "emp-mike":  "manager",  # Mike Johnson — Sales dept head
-    "emp-jenny": "manager",  # Jenny Liu — HR dept head
-    # Everyone else: employee (default)
+    "emp-rj": "admin",
+    "emp-jason": "employee",
 }
 
 def seed(table_name: str, region: str):

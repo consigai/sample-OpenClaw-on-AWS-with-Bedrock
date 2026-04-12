@@ -1,5 +1,5 @@
 """
-Seed workspace files for ALL employees that have SSM position mappings.
+Seed workspace files for the Consig sandbox employees.
 Creates IDENTITY.md, USER.md, MEMORY.md, and a daily memory file for each.
 Skips employees that already have workspace files in S3.
 """
@@ -9,39 +9,13 @@ import boto3
 from datetime import datetime, timezone
 
 EMPLOYEES = {
-    "emp-jiade":  {"name": "JiaDe Wang",    "pos": "pos-sa",     "posName": "Solutions Architect",       "dept": "Engineering"},
-    "emp-marcus": {"name": "Marcus Bell",   "pos": "pos-sa",     "posName": "Solutions Architect",       "dept": "Engineering"},
-    "emp-daniel": {"name": "Daniel Kim",    "pos": "pos-sa",     "posName": "Solutions Architect",       "dept": "Engineering"},
-    "emp-ryan":   {"name": "Ryan Park",     "pos": "pos-sde",    "posName": "Software Engineer",         "dept": "Backend Team"},
-    "emp-sophie": {"name": "Sophie Turner", "pos": "pos-sde",    "posName": "Software Engineer",         "dept": "Backend Team"},
-    "emp-nathan": {"name": "Nathan Brooks", "pos": "pos-sde",    "posName": "Software Engineer",         "dept": "Frontend Team"},
-    "emp-chris":  {"name": "Chris Morgan",  "pos": "pos-devops", "posName": "DevOps Engineer",           "dept": "Platform Team"},
-    "emp-lisa":   {"name": "Lisa Chen",     "pos": "pos-devops", "posName": "DevOps Engineer",           "dept": "Platform Team"},
-    "emp-tony":   {"name": "Tony Reed",     "pos": "pos-qa",     "posName": "QA Engineer",               "dept": "QA Team"},
-    "emp-mike":   {"name": "Mike Johnson",  "pos": "pos-ae",     "posName": "Account Executive",         "dept": "Enterprise Sales"},
-    "emp-sarah":  {"name": "Sarah Kim",     "pos": "pos-ae",     "posName": "Account Executive",         "dept": "Enterprise Sales"},
-    "emp-tom":    {"name": "Tom Wilson",    "pos": "pos-ae",     "posName": "Account Executive",         "dept": "SMB Sales"},
-    "emp-alex":   {"name": "Alex Rivera",   "pos": "pos-pm",     "posName": "Product Manager",           "dept": "Product"},
-    "emp-priya":  {"name": "Priya Patel",   "pos": "pos-pm",     "posName": "Product Manager",           "dept": "Product"},
-    "emp-carol":  {"name": "Carol Zhang",   "pos": "pos-fa",     "posName": "Finance Analyst",           "dept": "Finance"},
-    "emp-david":  {"name": "David Park",    "pos": "pos-fa",     "posName": "Finance Analyst",           "dept": "Finance"},
-    "emp-jenny":  {"name": "Jenny Liu",     "pos": "pos-hr",     "posName": "HR Specialist",             "dept": "HR & Admin"},
-    "emp-emma":   {"name": "Emma Chen",     "pos": "pos-csm",    "posName": "Customer Success Manager",  "dept": "Customer Success"},
-    "emp-rachel": {"name": "Rachel Li",     "pos": "pos-legal",  "posName": "Legal Counsel",             "dept": "Legal & Compliance"},
-    "emp-peter":  {"name": "Peter Wu",      "pos": "pos-exec",   "posName": "Executive",                 "dept": "Engineering"},
+    "emp-rj": {"name": "RJ Burnham", "pos": "pos-exec", "posName": "Executive", "dept": "Engineering"},
+    "emp-jason": {"name": "Jason Sajovic", "pos": "pos-devops", "posName": "DevOps Engineer", "dept": "Platform Team"},
 }
 
 USER_TEMPLATES = {
-    "pos-sa":    "# User Preferences\n\n- Communication: technical but accessible\n- Focus: AWS architecture, cost optimization, security\n- Code examples: Python, TypeScript, CDK\n- Always consider Well-Architected Framework pillars",
-    "pos-sde":   "# User Preferences\n\n- Communication: concise, code-first\n- Focus: clean code, testing, performance\n- Languages: Python, TypeScript, Go\n- Always include unit test examples",
     "pos-devops": "# User Preferences\n\n- Communication: direct, operational\n- Focus: infrastructure as code, CI/CD, monitoring\n- Tools: Terraform, Docker, Kubernetes, GitHub Actions\n- Always consider security and cost",
-    "pos-qa":    "# User Preferences\n\n- Communication: detail-oriented, systematic\n- Focus: test coverage, automation, quality metrics\n- Tools: pytest, Selenium, JMeter, Jira\n- Always include edge cases",
-    "pos-ae":    "# User Preferences\n\n- Communication: professional, customer-facing\n- Focus: deal pipeline, competitive analysis, ROI\n- Tools: CRM, presentation, email\n- Always consider customer impact",
-    "pos-pm":    "# User Preferences\n\n- Communication: structured, data-driven\n- Focus: user research, roadmap, metrics\n- Tools: Jira, Figma, analytics\n- Always tie back to user value",
-    "pos-fa":    "# User Preferences\n\n- Communication: precise, numbers-focused\n- Focus: budget analysis, forecasting, compliance\n- Format: tables and charts preferred\n- Always include variance explanations",
-    "pos-hr":    "# User Preferences\n\n- Communication: empathetic, policy-aware\n- Focus: employee experience, compliance, onboarding\n- Tools: HRIS, scheduling, communication\n- Always consider confidentiality",
-    "pos-csm":   "# User Preferences\n\n- Communication: proactive, relationship-focused\n- Focus: customer health, QBR prep, churn prevention\n- Tools: CRM, analytics, presentation\n- Always track NPS and engagement",
-    "pos-legal":  "# User Preferences\n\n- Communication: precise, risk-aware\n- Focus: contract review, compliance, IP protection\n- Tools: document review, regulatory databases\n- Always flag potential risks",
+    "pos-exec": "# User Preferences\n\n- Communication: direct, strategic\n- Focus: architecture tradeoffs, operating leverage, and risk\n- Format: concise summaries first, details on request\n- Always tie recommendations to execution reality",
 }
 
 
