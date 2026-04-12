@@ -150,7 +150,9 @@ if [ -f "$GATEWAY_SERVICE" ]; then
   fi
 fi
 
-# Set baseUrl in openclaw.json to H2 Proxy
+# Set baseUrl and model in openclaw.json to match the EC2 env file.
+# Without this, the generated gateway config can keep the package default
+# model ID even after /etc/openclaw/env has been updated.
 python3 -c "
 import json, os
 cfg = '/home/ubuntu/.openclaw/openclaw.json'
@@ -161,9 +163,20 @@ if os.path.isfile(cfg):
     if providers.get('baseUrl', '').startswith('https://bedrock-runtime'):
         providers['baseUrl'] = 'http://localhost:8091'
         changed = True
+    model_id = os.environ.get('BEDROCK_MODEL_ID', '')
+    models = providers.get('models', [])
+    if model_id and models:
+        if models[0].get('id') != model_id:
+            models[0]['id'] = model_id
+            changed = True
+    primary = c.get('agents', {}).get('defaults', {}).get('model', {}).get('primary')
+    desired_primary = f'amazon-bedrock/{model_id}' if model_id else primary
+    if model_id and primary != desired_primary:
+        c.setdefault('agents', {}).setdefault('defaults', {}).setdefault('model', {})['primary'] = desired_primary
+        changed = True
     if changed:
         json.dump(c, open(cfg, 'w'), indent=2)
-        print('  Gateway: baseUrl set to http://localhost:8091')
+        print(f'  Gateway config synced (baseUrl/model={model_id or \"unchanged\"})')
 " 2>/dev/null || true
 
 # Reload and restart Gateway
