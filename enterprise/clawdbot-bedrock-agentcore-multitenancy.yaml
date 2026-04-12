@@ -31,15 +31,14 @@ Metadata:
 Parameters:
   OpenClawModel:
     Type: String
-    Default: "global.amazon.nova-2-lite-v1:0"
-    Description: "Bedrock model ID - Nova 2 Lite offers best price-performance for everyday tasks"
+    Default: "amazon.nova-pro-v1:0"
+    Description: "Bedrock model ID for the default agent runtime"
     AllowedValues:
-      - "global.amazon.nova-2-lite-v1:0"
-      - "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
-      - "us.amazon.nova-pro-v1:0"
-      - "global.anthropic.claude-opus-4-5-20251101-v1:0"
-      - "global.anthropic.claude-haiku-4-5-20251001-v1:0"
-      - "global.anthropic.claude-sonnet-4-20250514-v1:0"
+      - "amazon.nova-lite-v1:0"
+      - "amazon.nova-pro-v1:0"
+      - "amazon.nova-premier-v1:0"
+      - "anthropic.claude-sonnet-4-6"
+      - "anthropic.claude-opus-4-6-v1"
       - "us.deepseek.r1-v1:0"
       - "us.meta.llama3-3-70b-instruct-v1:0"
 
@@ -101,7 +100,7 @@ Parameters:
 
   BedrockModelId:
     Type: String
-    Default: "global.amazon.nova-2-lite-v1:0"
+    Default: "amazon.nova-pro-v1:0"
     Description: "Bedrock model ID used by the Agent Container inside AgentCore Runtime"
 
   EnableAgentCoreMemory:
