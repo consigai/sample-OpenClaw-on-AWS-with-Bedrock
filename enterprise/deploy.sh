@@ -168,15 +168,25 @@ if [ "$STACK_STATUS" = "DOES_NOT_EXIST" ]; then
     --stack-name "$STACK_NAME" --region "$REGION"
 else
   info "  Stack exists ($STACK_STATUS) — updating..."
-  aws cloudformation update-stack \
+  UPDATE_ERR=$(mktemp)
+  if aws cloudformation update-stack \
     --stack-name "$STACK_NAME" \
     --template-body file://"$SCRIPT_DIR/clawdbot-bedrock-agentcore-multitenancy.yaml" \
     --capabilities CAPABILITY_NAMED_IAM \
     --region "$REGION" \
-    --parameters $CFN_PARAMS 2>/dev/null && \
-  aws cloudformation wait stack-update-complete \
-    --stack-name "$STACK_NAME" --region "$REGION" || \
-  info "  No stack changes needed"
+    --parameters $CFN_PARAMS 2>"$UPDATE_ERR"; then
+    aws cloudformation wait stack-update-complete \
+      --stack-name "$STACK_NAME" --region "$REGION"
+  else
+    if grep -q "No updates are to be performed" "$UPDATE_ERR"; then
+      info "  No stack changes needed"
+    else
+      UPDATE_MSG=$(cat "$UPDATE_ERR")
+      rm -f "$UPDATE_ERR"
+      error "CloudFormation update failed:\n$UPDATE_MSG"
+    fi
+  fi
+  rm -f "$UPDATE_ERR"
 fi
 
 # Get stack outputs
@@ -199,7 +209,35 @@ ECS_SUBNET=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --reg
 EFS_ID=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$REGION" \
   --query 'Stacks[0].Outputs[?OutputKey==`AlwaysOnEFSId`].OutputValue' --output text)
 
+INSTANCE_ROLE_NAME=$(aws cloudformation describe-stack-resources \
+  --stack-name "$STACK_NAME" --region "$REGION" \
+  --query 'StackResources[?LogicalResourceId==`OpenClawInstanceRole`].PhysicalResourceId' \
+  --output text 2>/dev/null || echo "")
+
 success "Stack ready — EC2: $INSTANCE_ID | S3: $S3_BUCKET"
+
+if [ -n "$INSTANCE_ROLE_NAME" ] && [ "$INSTANCE_ROLE_NAME" != "None" ]; then
+  info "  Ensuring EC2 host can stop AgentCore runtime sessions..."
+  POLICY_DOC=$(mktemp)
+  cat > "$POLICY_DOC" <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "bedrock-agentcore:StopRuntimeSession",
+      "Resource": "*"
+    }
+  ]
+}
+EOF
+  aws iam put-role-policy \
+    --role-name "$INSTANCE_ROLE_NAME" \
+    --policy-name OpenClawStopRuntimeSession \
+    --policy-document "file://$POLICY_DOC" \
+    --region "$REGION" &>/dev/null || warn "  Could not update OpenClawStopRuntimeSession on $INSTANCE_ROLE_NAME"
+  rm -f "$POLICY_DOC"
+fi
 
 # ── Step 3: Build and push Docker image ───────────────────────────────────────
 # Always builds on the gateway EC2 (ARM64 Graviton, Docker pre-installed, fast ECR network).

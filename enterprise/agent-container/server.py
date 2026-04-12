@@ -564,11 +564,13 @@ def _ensure_workspace_assembled(tenant_id: str) -> None:
                     if os.path.isfile(oc_config_path):
                         with open(oc_config_path) as f:
                             oc_config = json.load(f)
-                        old_model = os.environ.get("BEDROCK_MODEL_ID", "global.amazon.nova-2-lite-v1:0")
-                        oc_json_str = json.dumps(oc_config)
-                        oc_json_str = oc_json_str.replace(old_model, new_model_id)
+                        provider = oc_config.get("models", {}).get("providers", {}).get("amazon-bedrock", {})
+                        models = provider.get("models", [])
+                        if models:
+                            models[0]["id"] = new_model_id
+                        oc_config.setdefault("agents", {}).setdefault("defaults", {}).setdefault("model", {})["primary"] = f"amazon-bedrock/{new_model_id}"
                         with open(oc_config_path, "w") as f:
-                            f.write(oc_json_str)
+                            json.dump(oc_config, f, indent=2)
                         os.environ["BEDROCK_MODEL_ID"] = new_model_id
                         logger.info("Model updated to %s", new_model_id)
 
