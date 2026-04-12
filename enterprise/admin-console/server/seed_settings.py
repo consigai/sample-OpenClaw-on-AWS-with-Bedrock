@@ -15,15 +15,13 @@ def seed(table_name: str, region: str):
     items.append({"PK": ORG, "SK": "CONFIG#model", "GSI1PK": "TYPE#config", "GSI1SK": "CONFIG#model",
         "default": {"modelId": "amazon.nova-pro-v1:0", "modelName": "Amazon Nova Pro", "inputRate": "0.80", "outputRate": "3.20"},
         "fallback": {"modelId": "amazon.nova-lite-v1:0", "modelName": "Amazon Nova Lite", "inputRate": "0.06", "outputRate": "0.24"},
-        "positionOverrides": {
-            "pos-exec": {"modelId": "global.anthropic.claude-sonnet-4-6", "modelName": "Claude Sonnet 4.6", "inputRate": "3.00", "outputRate": "15.00", "reason": "Executive tier — stronger reasoning for strategic work"},
-        },
+        "positionOverrides": {},
         "availableModels": [
             {"modelId": "amazon.nova-pro-v1:0", "modelName": "Amazon Nova Pro", "inputRate": "0.80", "outputRate": "3.20", "enabled": True},
             {"modelId": "amazon.nova-lite-v1:0", "modelName": "Amazon Nova Lite", "inputRate": "0.06", "outputRate": "0.24", "enabled": True},
             {"modelId": "amazon.nova-premier-v1:0", "modelName": "Amazon Nova Premier", "inputRate": "2.50", "outputRate": "12.50", "enabled": True},
-            {"modelId": "global.anthropic.claude-sonnet-4-6", "modelName": "Claude Sonnet 4.6", "inputRate": "3.00", "outputRate": "15.00", "enabled": True},
-            {"modelId": "global.anthropic.claude-opus-4-6-v1", "modelName": "Claude Opus 4.6", "inputRate": "15.00", "outputRate": "75.00", "enabled": True},
+            {"modelId": "anthropic.claude-sonnet-4-6", "modelName": "Claude Sonnet 4.6", "inputRate": "3.00", "outputRate": "15.00", "enabled": True},
+            {"modelId": "anthropic.claude-opus-4-6-v1", "modelName": "Claude Opus 4.6", "inputRate": "15.00", "outputRate": "75.00", "enabled": True},
         ],
     })
 
