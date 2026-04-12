@@ -338,6 +338,7 @@ Resources:
                 Action:
                   - 'bedrock-agentcore:InvokeAgentRuntime'
                   - 'bedrock-agentcore:GetAgentRuntime'
+                  - 'bedrock-agentcore:StopRuntimeSession'
                 Resource: '*'
         - PolicyName: ECRAccessPolicy
           PolicyDocument:
