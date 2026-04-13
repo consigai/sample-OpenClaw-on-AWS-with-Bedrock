@@ -4,7 +4,7 @@ import type { ApexOptions } from 'apexcharts';
 import { useState } from 'react';
 import { ArrowLeft, Edit3, MessageSquare, Eye, Loader, FolderOpen, RefreshCw, Trash2 } from 'lucide-react';
 import { Card, Badge, Button, PageHeader, StatusDot, Modal } from '../../components/ui';
-import { useAgent, useAgents, usePositions, useBindings, useSessions, useAgentDailyUsage } from '../../hooks/useApi';
+import { useAgent, useAgents, usePositions, useBindings, useSessions, useAgentDailyUsage, useAlwaysOnStatus, useAlwaysOnChannels, useEnableAlwaysOn, useDisconnectChannel } from '../../hooks/useApi';
 import { api } from '../../api/client';
 import { CHANNEL_LABELS } from '../../types';
 import type { ChannelType } from '../../types';
@@ -44,6 +44,11 @@ export default function AgentDetail() {
   const { data: dailyUsage = [] } = useAgentDailyUsage(agentId || '');
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const empId = agent?.employeeId || '';
+  const { data: aoStatus } = useAlwaysOnStatus(empId);
+  const { data: aoChannels } = useAlwaysOnChannels(empId);
+  const enableAO = useEnableAlwaysOn();
+  const disconnectCh = useDisconnectChannel();
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader size={24} className="animate-spin text-primary" /></div>;
@@ -210,6 +215,82 @@ export default function AgentDetail() {
           </div>
         </Card>
       </div>
+
+      {/* Always-On Agent */}
+      <Card className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-text-primary">Always-On Agent (Fargate)</h3>
+          {aoStatus?.enabled ? (
+            <div className="flex items-center gap-2">
+              <Badge color={aoStatus.running ? 'success' : 'danger'}>
+                {aoStatus.running ? 'Running' : aoStatus.ecsStatus || 'Stopped'}
+              </Badge>
+              <Badge>{aoStatus.tier} tier</Badge>
+              <Button variant="default" size="sm" onClick={() => enableAO.mutate({ empId, enable: false })}>
+                Stop
+              </Button>
+            </div>
+          ) : (
+            <Button variant="primary" size="sm" onClick={() => enableAO.mutate({ empId, enable: true })}
+              disabled={enableAO.isPending}>
+              {enableAO.isPending ? 'Starting...' : 'Enable Always-On'}
+            </Button>
+          )}
+        </div>
+
+        {!aoStatus?.enabled && (
+          <p className="text-sm text-text-muted">
+            Always-on mode gives this employee a dedicated Fargate container with instant response,
+            persistent IM connections, and HEARTBEAT support. ~$7-16/month.
+          </p>
+        )}
+
+        {aoStatus?.enabled && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="rounded-lg bg-dark-bg px-3 py-2">
+                <p className="text-xs text-text-muted">Tier</p>
+                <p className="text-sm font-semibold">{aoStatus.tier}</p>
+              </div>
+              <div className="rounded-lg bg-dark-bg px-3 py-2">
+                <p className="text-xs text-text-muted">Service</p>
+                <p className="text-sm font-mono text-text-secondary">{aoStatus.serviceName || '—'}</p>
+              </div>
+              <div className="rounded-lg bg-dark-bg px-3 py-2">
+                <p className="text-xs text-text-muted">Status</p>
+                <p className="text-sm font-semibold">{aoStatus.ecsStatus}</p>
+              </div>
+              <div className="rounded-lg bg-dark-bg px-3 py-2">
+                <p className="text-xs text-text-muted">Endpoint</p>
+                <p className="text-sm font-mono text-text-secondary truncate">{aoStatus.endpoint || '—'}</p>
+              </div>
+            </div>
+
+            {/* IM Connections */}
+            <div>
+              <p className="text-sm font-medium text-text-primary mb-2">IM Connections</p>
+              {(aoChannels?.channels || []).length === 0 ? (
+                <p className="text-xs text-text-muted">No IM channels connected. Employee can connect via Portal → My Agents.</p>
+              ) : (
+                <div className="space-y-2">
+                  {(aoChannels?.channels || []).map((ch: any) => (
+                    <div key={ch.channel} className="flex items-center justify-between rounded-lg bg-dark-bg px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Badge color="success">{ch.channel}</Badge>
+                        <span className="text-xs text-text-muted">Connected {ch.connectedAt ? new Date(ch.connectedAt).toLocaleDateString() : ''}</span>
+                      </div>
+                      <Button variant="ghost" size="sm"
+                        onClick={() => disconnectCh.mutate({ empId, channel: ch.channel })}>
+                        Disconnect
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Card>
 
       {/* Active Sessions */}
       {sessions.length > 0 && (

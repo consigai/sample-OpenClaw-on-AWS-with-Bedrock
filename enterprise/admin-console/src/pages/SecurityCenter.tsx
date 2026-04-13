@@ -14,7 +14,7 @@ import {
   useModelConfig, useUpdateModelConfig, useUpdateFallbackModel,
   useSetPositionModel, useRemovePositionModel,
   usePositionRuntimeMap, useSetPositionRuntime, useDeletePositionRuntime,
-  useGuardrails, useServiceStatus,
+  useGuardrails, useServiceStatus, useFargateOverview,
 } from '../hooks/useApi';
 import { Select } from '../components/ui';
 
@@ -873,6 +873,7 @@ export default function SecurityCenter() {
       <Tabs
         tabs={[
           { id: 'runtimes', label: 'Agent Runtimes' },
+          { id: 'fargate', label: 'Fargate Agents' },
           { id: 'policies', label: 'Security Policies' },
           { id: 'infrastructure', label: 'Infrastructure' },
         ]}
@@ -969,6 +970,9 @@ export default function SecurityCenter() {
             </Card>
           </div>
         )}
+
+        {/* ── Fargate Agents ── */}
+        {tab === 'fargate' && <FargateOverviewPanel />}
 
         {/* ── Policies ── */}
         {tab === 'policies' && (
@@ -1202,6 +1206,85 @@ export default function SecurityCenter() {
       {showCreateRuntime && (
         <CreateRuntimeModal models={models} onClose={() => setShowCreateRuntime(false)} awsRegion={awsRegion} />
       )}
+    </div>
+  );
+}
+
+
+// ── Fargate Overview Panel ────────────────────────────────────────────────
+
+function FargateOverviewPanel() {
+  const { data, isLoading } = useFargateOverview();
+  const agents = data?.alwaysOnAgents || [];
+
+  const tierColors: Record<string, string> = {
+    standard: 'info', restricted: 'warning', engineering: 'success', executive: 'primary',
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-text-primary">Always-On Agents (Fargate)</h3>
+            <p className="text-sm text-text-muted mt-1">
+              Per-employee Fargate containers with dedicated Gateway, IM direct connection, and HEARTBEAT support
+            </p>
+          </div>
+          <Badge color="primary">{agents.length} active</Badge>
+        </div>
+
+        {isLoading ? (
+          <div className="flex justify-center py-8 text-text-muted">Loading...</div>
+        ) : agents.length === 0 ? (
+          <div className="rounded-lg bg-dark-bg p-6 text-center">
+            <p className="text-text-muted">No always-on agents configured</p>
+            <p className="text-xs text-text-muted mt-1">
+              Enable always-on in Agent Factory → employee detail → Enable Always-On
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-dark-border">
+                  <th className="text-left py-2 px-3 text-xs text-text-muted font-medium">Employee</th>
+                  <th className="text-left py-2 px-3 text-xs text-text-muted font-medium">Position</th>
+                  <th className="text-left py-2 px-3 text-xs text-text-muted font-medium">Tier</th>
+                  <th className="text-left py-2 px-3 text-xs text-text-muted font-medium">Status</th>
+                  <th className="text-left py-2 px-3 text-xs text-text-muted font-medium">IM Channels</th>
+                  <th className="text-left py-2 px-3 text-xs text-text-muted font-medium">Service</th>
+                </tr>
+              </thead>
+              <tbody>
+                {agents.map((a: any) => (
+                  <tr key={a.employeeId} className="border-b border-dark-border/50 hover:bg-dark-hover">
+                    <td className="py-2 px-3 font-medium">{a.employeeName}</td>
+                    <td className="py-2 px-3 text-text-secondary">{a.positionName}</td>
+                    <td className="py-2 px-3">
+                      <Badge color={tierColors[a.tier] || 'default'}>{a.tier}</Badge>
+                    </td>
+                    <td className="py-2 px-3">
+                      <Badge color={a.status === 'starting' || a.status === 'running' ? 'success' : 'danger'}>
+                        {a.status}
+                      </Badge>
+                    </td>
+                    <td className="py-2 px-3">
+                      {(a.imChannels || []).length === 0
+                        ? <span className="text-text-muted">—</span>
+                        : (a.imChannels || []).map((ch: string) => (
+                            <Badge key={ch} color="info" className="mr-1">{ch}</Badge>
+                          ))
+                      }
+                    </td>
+                    <td className="py-2 px-3 font-mono text-xs text-text-muted">{a.serviceName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

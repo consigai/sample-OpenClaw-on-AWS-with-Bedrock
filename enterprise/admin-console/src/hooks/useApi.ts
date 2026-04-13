@@ -1197,3 +1197,71 @@ export function useSetEmployeeKBs() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['kb-assignments'] }),
   });
 }
+
+// ── Always-On Agent Management ───────────────────────────────────────────
+
+export function useAlwaysOnStatus(empId: string) {
+  return useQuery({
+    queryKey: ['always-on-status', empId],
+    queryFn: () => api.get(`/agents/${empId}/always-on/status`),
+    enabled: !!empId,
+    refetchInterval: 30000,
+  });
+}
+
+export function useAlwaysOnChannels(empId: string) {
+  return useQuery({
+    queryKey: ['always-on-channels', empId],
+    queryFn: () => api.get(`/agents/${empId}/always-on/channels`),
+    enabled: !!empId,
+  });
+}
+
+export function useEnableAlwaysOn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ empId, enable }: { empId: string; enable: boolean }) =>
+      api.put(`/agents/${empId}/always-on`, { enable }),
+    onSuccess: (_, { empId }) => {
+      qc.invalidateQueries({ queryKey: ['always-on-status', empId] });
+      qc.invalidateQueries({ queryKey: ['employees'] });
+      qc.invalidateQueries({ queryKey: ['agents'] });
+    },
+  });
+}
+
+export function useDisconnectChannel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ empId, channel }: { empId: string; channel: string }) =>
+      api.delete(`/agents/${empId}/always-on/channels/${channel}`),
+    onSuccess: (_, { empId }) => {
+      qc.invalidateQueries({ queryKey: ['always-on-channels', empId] });
+    },
+  });
+}
+
+export function useFargateOverview() {
+  return useQuery({
+    queryKey: ['fargate-overview'],
+    queryFn: () => api.get('/security/fargate/overview'),
+    refetchInterval: 30000,
+  });
+}
+
+export function useWorkspaceFiles(empId: string, agentType: string = 'serverless') {
+  return useQuery({
+    queryKey: ['workspace-files', empId, agentType],
+    queryFn: () => api.get(`/workspace/${empId}/files?agent_type=${agentType}`),
+    enabled: !!empId,
+  });
+}
+
+export function useSetIMPlatforms() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ posId, platforms }: { posId: string; platforms: string[] }) =>
+      api.put(`/security/positions/${posId}/im-platforms`, { allowedIMPlatforms: platforms }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['positions'] }),
+  });
+}
