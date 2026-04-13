@@ -912,3 +912,197 @@ def get_skill_code(skill_name: str, source: str = "shared", authorization: str =
         "manifest": json.loads(manifest) if manifest else None,
         "setupGuide": guide or "",
     }
+
+
+# =========================================================================
+# Always-On Agent Management
+# =========================================================================
+
+@router.put("/api/v1/agents/{emp_id}/always-on")
+def enable_always_on(emp_id: str, body: dict, authorization: str = Header(default="")):
+    """Enable or disable always-on for an employee.
+    enable=true: creates ECS Service. enable=false: stops ECS Service."""
+    user = require_role(authorization, roles=["admin"])
+    enable = body.get("enable", True)
+
+    emp = db.get_employee(emp_id)
+    if not emp:
+        raise HTTPException(404, "Employee not found")
+
+    agent_id = emp.get("agentId")
+    if not agent_id:
+        raise HTTPException(400, "Employee has no agent. Create one first in Agent Factory.")
+
+    if enable:
+        # Delegate to admin_always_on.py start
+        from routers.admin_always_on import start_always_on_agent
+        # Inject a fake authorization header since we already validated
+        return start_always_on_agent(agent_id, authorization=authorization)
+    else:
+        from routers.admin_always_on import stop_always_on_agent
+        result = stop_always_on_agent(agent_id, authorization=authorization)
+        # Clear EMP# always-on fields
+        db.update_employee(emp_id, {"alwaysOnEnabled": False, "alwaysOnStatus": "stopped"})
+        return result
+
+
+@router.get("/api/v1/agents/{emp_id}/always-on/status")
+def get_always_on_status(emp_id: str, authorization: str = Header(default="")):
+    """Get always-on container status for an employee."""
+    require_role(authorization, roles=["admin", "manager"])
+    emp = db.get_employee(emp_id)
+    if not emp:
+        raise HTTPException(404, "Employee not found")
+
+    agent_id = emp.get("agentId", "")
+    if not emp.get("alwaysOnEnabled"):
+        return {"enabled": False, "status": "not_configured", "employeeId": emp_id}
+
+    # Get container status from admin_always_on
+    from routers.admin_always_on import get_always_on_status as _get_status
+    try:
+        container = _get_status(agent_id, authorization=authorization)
+    except Exception:
+        container = {"running": False, "ecsStatus": "UNKNOWN"}
+
+    return {
+        "enabled": True,
+        "employeeId": emp_id,
+        "agentId": agent_id,
+        "tier": emp.get("alwaysOnTier", "standard"),
+        "serviceName": emp.get("alwaysOnServiceName", ""),
+        "running": container.get("running", False),
+        "ecsStatus": container.get("ecsStatus", "UNKNOWN"),
+        "endpoint": container.get("endpoint"),
+    }
+
+
+@router.get("/api/v1/agents/{emp_id}/always-on/channels")
+def get_always_on_channels(emp_id: str, authorization: str = Header(default="")):
+    """Get IM channel status for an employee's always-on container."""
+    require_role(authorization, roles=["admin", "manager"])
+    emp = db.get_employee(emp_id)
+    if not emp:
+        raise HTTPException(404, "Employee not found")
+
+    if not emp.get("alwaysOnEnabled"):
+        return {"channels": [], "reason": "always-on not enabled"}
+
+    # Read IM credentials from DynamoDB (masked)
+    im_creds = emp.get("imCredentials", {}) or {}
+    channels = []
+    for ch, data in im_creds.items():
+        if not data or not isinstance(data, dict):
+            continue
+        channels.append({
+            "channel": ch,
+            "connected": True,
+            "connectedAt": data.get("connectedAt", ""),
+            "masked": True,  # never show actual tokens
+        })
+
+    # Also try to get live status from container
+    agent_id = emp.get("agentId", "")
+    try:
+        ssm = boto3.client("ssm", region_name=GATEWAY_REGION)
+        endpoint = ssm.get_parameter(
+            Name=f"/openclaw/{STACK_NAME}/always-on/{agent_id}/endpoint"
+        )["Parameter"]["Value"]
+        import requests as _req_ch
+        r = _req_ch.get(f"{endpoint}/admin/channels/list", timeout=5)
+        if r.status_code == 200:
+            return {"channels": channels, "liveStatus": r.json().get("output", "")}
+    except Exception:
+        pass
+
+    return {"channels": channels}
+
+
+@router.delete("/api/v1/agents/{emp_id}/always-on/channels/{channel}")
+def disconnect_always_on_channel(emp_id: str, channel: str, authorization: str = Header(default="")):
+    """Disconnect an IM channel from an employee's always-on container."""
+    user = require_role(authorization, roles=["admin"])
+    emp = db.get_employee(emp_id)
+    if not emp:
+        raise HTTPException(404, "Employee not found")
+
+    agent_id = emp.get("agentId", "")
+
+    # Call container to remove channel
+    try:
+        ssm = boto3.client("ssm", region_name=GATEWAY_REGION)
+        endpoint = ssm.get_parameter(
+            Name=f"/openclaw/{STACK_NAME}/always-on/{agent_id}/endpoint"
+        )["Parameter"]["Value"]
+        import requests as _req_dc
+        r = _req_dc.post(f"{endpoint}/admin/channels/remove",
+                        json={"channel": channel}, timeout=15)
+    except Exception as e:
+        print(f"[disconnect-channel] Container call failed: {e}")
+
+    # Remove credential from DynamoDB
+    im_creds = emp.get("imCredentials", {}) or {}
+    if channel in im_creds:
+        im_creds.pop(channel)
+        db.update_employee(emp_id, {"imCredentials": im_creds})
+
+    # Audit
+    db.create_audit_entry({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "eventType": "config_change",
+        "actorId": user.employee_id,
+        "actorName": user.name,
+        "targetType": "im_channel",
+        "targetId": f"{emp_id}/{channel}",
+        "detail": f"Admin disconnected {channel} for {emp_id}",
+        "status": "success",
+    })
+    return {"disconnected": True, "channel": channel, "employeeId": emp_id}
+
+
+@router.get("/api/v1/workspace/{emp_id}/files")
+def get_workspace_files(emp_id: str, agent_type: str = "serverless",
+                        authorization: str = Header(default="")):
+    """List workspace files. agent_type=serverless reads S3, agent_type=always-on reads EFS."""
+    require_role(authorization, roles=["admin", "manager"])
+
+    if agent_type == "always-on":
+        # Read from EFS (mounted on EC2 at /mnt/efs)
+        efs_path = f"/mnt/efs/{emp_id}/workspace"
+        if not os.path.isdir(efs_path):
+            return {"files": [], "source": "efs", "error": "EFS workspace not found"}
+        files = []
+        for root, dirs, fnames in os.walk(efs_path):
+            for fname in fnames:
+                fpath = os.path.join(root, fname)
+                rel = os.path.relpath(fpath, efs_path)
+                try:
+                    stat = os.stat(fpath)
+                    files.append({
+                        "path": rel,
+                        "size": stat.st_size,
+                        "modified": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+                    })
+                except OSError:
+                    pass
+        return {"files": files, "source": "efs", "basePath": efs_path}
+    else:
+        # Read from S3 (existing logic)
+        bucket = os.environ.get("S3_BUCKET", f"openclaw-tenants-{GATEWAY_ACCOUNT_ID}")
+        prefix = f"{emp_id}/workspace/"
+        try:
+            s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+            resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix, MaxKeys=200)
+            files = []
+            for obj in resp.get("Contents", []):
+                rel = obj["Key"].replace(prefix, "")
+                if not rel:
+                    continue
+                files.append({
+                    "path": rel,
+                    "size": obj["Size"],
+                    "modified": obj["LastModified"].isoformat(),
+                })
+            return {"files": files, "source": "s3", "bucket": bucket, "prefix": prefix}
+        except Exception as e:
+            return {"files": [], "source": "s3", "error": str(e)}

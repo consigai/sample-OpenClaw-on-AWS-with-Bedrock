@@ -344,6 +344,59 @@ def deactivate_fargate_tier(tier_name: str, authorization: str = Header(default=
         raise HTTPException(500, f"Failed to deactivate tier: {e}")
 
 
+@router.get("/api/v1/security/fargate/overview")
+def get_fargate_overview(authorization: str = Header(default="")):
+    """Overview of ALL always-on employees — for Security Center Fargate panel."""
+    require_role(authorization, roles=["admin"])
+    employees = db.get_employees()
+    agents = db.get_agents()
+    agent_map = {a["id"]: a for a in agents}
+
+    always_on = []
+    for emp in employees:
+        if not emp.get("alwaysOnEnabled"):
+            continue
+        agent = agent_map.get(emp.get("agentId", ""), {})
+        always_on.append({
+            "employeeId": emp["id"],
+            "employeeName": emp.get("name", ""),
+            "positionName": emp.get("positionName", ""),
+            "tier": emp.get("alwaysOnTier", "standard"),
+            "serviceName": emp.get("alwaysOnServiceName", ""),
+            "status": agent.get("containerStatus", "unknown"),
+            "deployMode": agent.get("deployMode", "serverless"),
+            "imChannels": list((emp.get("imCredentials") or {}).keys()),
+        })
+
+    return {"alwaysOnAgents": always_on, "count": len(always_on)}
+
+
+@router.put("/api/v1/security/positions/{pos_id}/im-platforms")
+def set_position_im_platforms(pos_id: str, body: dict, authorization: str = Header(default="")):
+    """Set allowed IM platforms for a position. Employees in this position
+    can only connect IM channels from the allowed list."""
+    user = require_role(authorization, roles=["admin"])
+    platforms = body.get("allowedIMPlatforms", [])
+    valid = {"feishu", "telegram", "discord", "slack", "whatsapp", "teams", "dingtalk", "googlechat"}
+    invalid = [p for p in platforms if p not in valid]
+    if invalid:
+        raise HTTPException(400, f"Invalid platforms: {invalid}. Valid: {sorted(valid)}")
+
+    db.update_position(pos_id, {"allowedIMPlatforms": platforms})
+
+    db.create_audit_entry({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "eventType": "config_change",
+        "actorId": user.employee_id,
+        "actorName": user.name,
+        "targetType": "im_platforms",
+        "targetId": pos_id,
+        "detail": f"IM platforms for {pos_id}: {platforms}",
+        "status": "success",
+    })
+    return {"saved": True, "positionId": pos_id, "allowedIMPlatforms": platforms}
+
+
 # ── Runtimes (AgentCore) ─────────────────────────────────────────────────
 
 @router.get("/api/v1/security/runtimes")
