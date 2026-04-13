@@ -419,8 +419,9 @@ function tryTenantRouterWithTimeout(channel, userId, message, timeoutMs) {
 async function routeRequest(channel, userId, userText) {
   const tenantKey = getTenantKey(channel, userId);
   const status = getTenantStatus(tenantKey);
+  const canFastPath = FAST_PATH_ENABLED && !!(await initBedrockClient());
 
-  log(`Route: ${tenantKey} status=${status} fast_path=${FAST_PATH_ENABLED}`);
+  log(`Route: ${tenantKey} status=${status} fast_path=${FAST_PATH_ENABLED} available=${canFastPath}`);
 
   // --- Warm: microVM is running, use full OpenClaw pipeline ---
   if (status === 'warm') {
@@ -429,8 +430,12 @@ async function routeRequest(channel, userId, userText) {
     return text;
   }
 
-  // --- Fast-path disabled: always go through Tenant Router ---
-  if (!FAST_PATH_ENABLED) {
+  // --- Fast-path disabled/unavailable: always go through Tenant Router ---
+  // Do NOT fire the background prewarm request in this mode. When the local
+  // Bedrock SDK is unavailable, a "cold" request would otherwise issue both a
+  // warmup turn and the real user turn into the same employee session. That
+  // races the first two requests and can poison OpenClaw's conversation state.
+  if (!canFastPath) {
     if (status === 'cold') setTenantStatus(tenantKey, 'warming');
     const text = await forwardToTenantRouter(channel, userId, userText);
     setTenantStatus(tenantKey, 'warm');
