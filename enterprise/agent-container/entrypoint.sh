@@ -79,6 +79,14 @@ echo "$BASE_TENANT_ID" > /tmp/base_tenant_id
 OPENCLAW_CONFIG_DIR="$HOME/.openclaw"
 mkdir -p "$OPENCLAW_CONFIG_DIR"
 
+# Compatibility alias: the packaged Google Workspace skill is named "gog",
+# but users and the agent often refer to it as "gws". Without this alias,
+# OpenClaw can try to read ~/.openclaw/skills/gws/SKILL.md and fail the turn.
+if [ -d "$OPENCLAW_CONFIG_DIR/skills/gog" ] && [ ! -e "$OPENCLAW_CONFIG_DIR/skills/gws" ]; then
+    ln -s "$OPENCLAW_CONFIG_DIR/skills/gog" "$OPENCLAW_CONFIG_DIR/skills/gws"
+    echo "[entrypoint] Created skill alias: gws -> gog"
+fi
+
 # Generate a random gateway token for this container instance
 # This token is stored in SSM so the admin console proxy can inject it
 GATEWAY_TOKEN=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
