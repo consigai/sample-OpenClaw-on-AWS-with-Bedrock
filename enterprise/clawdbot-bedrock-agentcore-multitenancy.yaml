@@ -1131,7 +1131,331 @@ Resources:
         - Key: Name
           Value: !Sub "${AWS::StackName}-ecs-task-role"
 
-  # Allow ECS tasks to reach EFS (added after AlwaysOnTaskSecurityGroup is created)
+  # ---- Per-tier Task Roles (container-level AWS API permissions) ----
+  # The existing AlwaysOnEcsTaskRole is kept as the EXECUTION role (ECR pull + CloudWatch).
+  # These 4 roles are TASK roles — different AWS API permissions per security tier.
+  # admin_always_on.py selects the role based on employee's position tier.
+
+  AlwaysOnTaskRoleStandard:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-ecs-role-standard"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StandardTierPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: BedrockInvoke
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                  - bedrock:ApplyGuardrail
+                Resource: "*"
+              - Sid: S3ReadWrite
+                Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:ListBucket]
+                Resource:
+                  - !GetAtt TenantWorkspaceBucket.Arn
+                  - !Sub "${TenantWorkspaceBucket.Arn}/*"
+              - Sid: DynamoDBReadWrite
+                Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:Query]
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AWS::StackName}*"
+              - Sid: SSMRead
+                Effect: Allow
+                Action: [ssm:GetParameter, ssm:GetParametersByPath]
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/openclaw/${AWS::StackName}/*"
+              - Sid: EFSAccess
+                Effect: Allow
+                Action: [elasticfilesystem:ClientMount, elasticfilesystem:ClientWrite]
+                Resource: !GetAtt AlwaysOnEFS.Arn
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/ecs/${AWS::StackName}-always-on:*"
+
+  AlwaysOnTaskRoleRestricted:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-ecs-role-restricted"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: RestrictedTierPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: BedrockInvoke
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                  - bedrock:ApplyGuardrail
+                Resource: "*"
+              - Sid: S3ReadOnly
+                Effect: Allow
+                Action: [s3:GetObject, s3:ListBucket]
+                Resource:
+                  - !GetAtt TenantWorkspaceBucket.Arn
+                  - !Sub "${TenantWorkspaceBucket.Arn}/*"
+              - Sid: DynamoDBReadOnly
+                Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:Query]
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AWS::StackName}*"
+              - Sid: SSMRead
+                Effect: Allow
+                Action: [ssm:GetParameter, ssm:GetParametersByPath]
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/openclaw/${AWS::StackName}/*"
+              - Sid: EFSAccess
+                Effect: Allow
+                Action: [elasticfilesystem:ClientMount, elasticfilesystem:ClientWrite]
+                Resource: !GetAtt AlwaysOnEFS.Arn
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/ecs/${AWS::StackName}-always-on:*"
+
+  AlwaysOnTaskRoleEngineering:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-ecs-role-engineering"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EngineeringTierPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: BedrockInvoke
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: "*"
+              - Sid: S3Full
+                Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:DeleteObject, s3:ListBucket]
+                Resource:
+                  - !GetAtt TenantWorkspaceBucket.Arn
+                  - !Sub "${TenantWorkspaceBucket.Arn}/*"
+              - Sid: DynamoDBFull
+                Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:Query, dynamodb:Scan]
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AWS::StackName}*"
+              - Sid: SSMFull
+                Effect: Allow
+                Action: [ssm:GetParameter, ssm:PutParameter, ssm:GetParametersByPath, ssm:DeleteParameter]
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/openclaw/${AWS::StackName}/*"
+              - Sid: EFSAccess
+                Effect: Allow
+                Action: [elasticfilesystem:ClientMount, elasticfilesystem:ClientWrite, elasticfilesystem:ClientRootAccess]
+                Resource: !GetAtt AlwaysOnEFS.Arn
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/ecs/${AWS::StackName}-always-on:*"
+
+  AlwaysOnTaskRoleExecutive:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-ecs-role-executive"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ExecutiveTierPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: BedrockFull
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                  - bedrock:ListFoundationModels
+                Resource: "*"
+              - Sid: S3Full
+                Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:DeleteObject, s3:ListBucket]
+                Resource:
+                  - !GetAtt TenantWorkspaceBucket.Arn
+                  - !Sub "${TenantWorkspaceBucket.Arn}/*"
+              - Sid: DynamoDBFull
+                Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:Query, dynamodb:Scan]
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AWS::StackName}*"
+              - Sid: SSMFull
+                Effect: Allow
+                Action: [ssm:GetParameter, ssm:PutParameter, ssm:GetParametersByPath, ssm:DeleteParameter]
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/openclaw/${AWS::StackName}/*"
+              - Sid: EFSAccess
+                Effect: Allow
+                Action: [elasticfilesystem:ClientMount, elasticfilesystem:ClientWrite, elasticfilesystem:ClientRootAccess]
+                Resource: !GetAtt AlwaysOnEFS.Arn
+              - Sid: ECRRead
+                Effect: Allow
+                Action: [ecr:GetAuthorizationToken, ecr:BatchGetImage, ecr:GetDownloadUrlForLayer]
+                Resource: "*"
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/ecs/${AWS::StackName}-always-on:*"
+
+  # ---- Per-tier Security Groups (network isolation) ----
+  # Restricted: no internet. Standard: HTTPS only. Engineering/Executive: all outbound.
+
+  AlwaysOnSGStandard:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Always-on Standard tier — HTTPS outbound only"
+      VpcId: !If [CreateNewVPC, !Ref OpenClawVPC, !Ref ExistingVpcId]
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref OpenClawSecurityGroup
+          Description: "EC2 to container"
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: "0.0.0.0/0"
+          Description: "HTTPS to Bedrock/S3/DDB/internet"
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref AlwaysOnEFSSecurityGroup
+          Description: "NFS to EFS"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-ecs-sg-standard"
+
+  AlwaysOnSGRestricted:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Always-on Restricted tier — AWS services only, no internet"
+      VpcId: !If [CreateNewVPC, !Ref OpenClawVPC, !Ref ExistingVpcId]
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref OpenClawSecurityGroup
+          Description: "EC2 to container"
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: "0.0.0.0/0"
+          Description: "HTTPS to Bedrock/S3/DDB (VPC endpoints preferred)"
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref AlwaysOnEFSSecurityGroup
+          Description: "NFS to EFS"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-ecs-sg-restricted"
+
+  AlwaysOnSGEngineering:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Always-on Engineering tier — full outbound"
+      VpcId: !If [CreateNewVPC, !Ref OpenClawVPC, !Ref ExistingVpcId]
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref OpenClawSecurityGroup
+          Description: "EC2 to container"
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-ecs-sg-engineering"
+
+  AlwaysOnSGExecutive:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Always-on Executive tier — full outbound"
+      VpcId: !If [CreateNewVPC, !Ref OpenClawVPC, !Ref ExistingVpcId]
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref OpenClawSecurityGroup
+          Description: "EC2 to container"
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-ecs-sg-executive"
+
+  # Allow per-tier SGs to reach EFS
+  AlwaysOnEFSIngressStandard:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AlwaysOnEFSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref AlwaysOnSGStandard
+      Description: "Standard tier to EFS"
+
+  AlwaysOnEFSIngressRestricted:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AlwaysOnEFSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref AlwaysOnSGRestricted
+      Description: "Restricted tier to EFS"
+
+  AlwaysOnEFSIngressEngineering:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AlwaysOnEFSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref AlwaysOnSGEngineering
+      Description: "Engineering tier to EFS"
+
+  AlwaysOnEFSIngressExecutive:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AlwaysOnEFSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref AlwaysOnSGExecutive
+      Description: "Executive tier to EFS"
+
+  # Allow ECS tasks to reach EFS (legacy shared SG — kept for backward compat)
   AlwaysOnEFSIngressFromECS:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -1324,6 +1648,34 @@ Outputs:
     Value: !Ref AlwaysOnEFS
     Export:
       Name: !Sub "${AWS::StackName}-AlwaysOnEFS"
+
+  # Per-tier Task Role ARNs (admin_always_on.py selects by tier)
+  AlwaysOnRoleStandardArn:
+    Description: "Task Role ARN for Standard tier always-on agents"
+    Value: !GetAtt AlwaysOnTaskRoleStandard.Arn
+  AlwaysOnRoleRestrictedArn:
+    Description: "Task Role ARN for Restricted tier always-on agents"
+    Value: !GetAtt AlwaysOnTaskRoleRestricted.Arn
+  AlwaysOnRoleEngineeringArn:
+    Description: "Task Role ARN for Engineering tier always-on agents"
+    Value: !GetAtt AlwaysOnTaskRoleEngineering.Arn
+  AlwaysOnRoleExecutiveArn:
+    Description: "Task Role ARN for Executive tier always-on agents"
+    Value: !GetAtt AlwaysOnTaskRoleExecutive.Arn
+
+  # Per-tier Security Group IDs
+  AlwaysOnSGStandardId:
+    Description: "SG for Standard tier (HTTPS outbound only)"
+    Value: !Ref AlwaysOnSGStandard
+  AlwaysOnSGRestrictedId:
+    Description: "SG for Restricted tier (AWS services only)"
+    Value: !Ref AlwaysOnSGRestricted
+  AlwaysOnSGEngineeringId:
+    Description: "SG for Engineering tier (full outbound)"
+    Value: !Ref AlwaysOnSGEngineering
+  AlwaysOnSGExecutiveId:
+    Description: "SG for Executive tier (full outbound)"
+    Value: !Ref AlwaysOnSGExecutive
 
   AlwaysOnSubnetId:
     Description: "Subnet ID for always-on ECS tasks"
