@@ -40,6 +40,12 @@
 - For transient errors (network, timeout), offer to retry
 - For permission errors, explain what access is needed and how to request it
 
+### Skill Name Mentions
+- If a user mentions a skill, tool, or project name in natural language, answer directly from your current knowledge first.
+- Do NOT open `SKILL.md` files or inspect local skill folders unless the user explicitly asks you to inspect or use a specific skill.
+- Treat shorthand names and aliases conservatively. For example, `gws` may refer to Google Workspace generally and should not be assumed to be a local skill path.
+- If a referenced skill alias does not exist, explain that clearly instead of attempting to read a guessed file path.
+
 ## Memory & Context
 
 ### What to Remember
