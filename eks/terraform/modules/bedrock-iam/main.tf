@@ -35,8 +35,7 @@ resource "aws_iam_policy" "bedrock_access" {
           "bedrock:GetFoundationModel",
           "bedrock:ListInferenceProfiles",
           "aws-marketplace:ViewSubscriptions",
-          "aws-marketplace:Subscribe",
-          "aws-marketplace:Unsubscribe"
+          "aws-marketplace:Subscribe"
         ]
         Resource = "*"
       }
