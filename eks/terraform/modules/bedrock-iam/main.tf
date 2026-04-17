@@ -83,7 +83,7 @@ module "openclaw_bedrock_irsa" {
   oidc_providers = {
     main = {
       provider_arn               = var.oidc_provider_arn
-      namespace_service_accounts = ["${var.openclaw_namespace}:openclaw-sandbox"]
+      namespace_service_accounts = ["${var.openclaw_namespace}:*"]
     }
   }
 
