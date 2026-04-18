@@ -154,7 +154,20 @@ CFN_PARAMS="$CFN_PARAMS ParameterKey=ExistingSubnetId,ParameterValue=${EXISTING_
 
 # Template is 70KB — exceeds 51,200 byte inline limit, must use S3
 info "  Uploading CloudFormation template to S3..."
-STAGING_BUCKET="openclaw-deploy-772603144957-us-east-1"
+STAGING_BUCKET="openclaw-deploy-${ACCOUNT_ID}-${REGION}"
+
+if ! aws s3api head-bucket --bucket "$STAGING_BUCKET" 2>/dev/null; then
+  echo "[info]  Creating staging bucket s3://${STAGING_BUCKET}..."
+  if [ "$REGION" = "us-east-1" ]; then
+    aws s3api create-bucket --bucket "$STAGING_BUCKET" --region "$REGION"
+  else
+    aws s3api create-bucket --bucket "$STAGING_BUCKET" --region "$REGION" \
+      --create-bucket-configuration LocationConstraint="$REGION"
+  fi
+  aws s3api put-public-access-block --bucket "$STAGING_BUCKET" \
+    --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+fi
+
 aws s3 cp "$SCRIPT_DIR/clawdbot-bedrock-agentcore-multitenancy.yaml" \
   "s3://${STAGING_BUCKET}/cfn/clawdbot-bedrock-agentcore-multitenancy.yaml" \
   --region "$REGION" --quiet
