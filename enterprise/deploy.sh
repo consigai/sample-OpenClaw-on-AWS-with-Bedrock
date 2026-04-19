@@ -668,10 +668,13 @@ else
   cd "$SEED_DIR"
   # Use a temporary venv for seed scripts (avoids PEP 668 / macOS Homebrew conflicts)
   SEED_VENV="/tmp/openclaw-seed-venv"
-  if [ ! -d "$SEED_VENV" ]; then
+  if [ ! -x "$SEED_VENV/bin/python" ]; then
     python3 -m venv "$SEED_VENV"
   fi
-  "$SEED_VENV/bin/pip" install -q -r requirements.txt
+  if [ ! -x "$SEED_VENV/bin/pip" ]; then
+    "$SEED_VENV/bin/python" -m ensurepip --upgrade
+  fi
+  "$SEED_VENV/bin/python" -m pip install -q -r requirements.txt
   # Use the venv's python for all seed commands
   SEED_PYTHON="$SEED_VENV/bin/python"
   AWS_REGION="$DYNAMODB_REGION" $SEED_PYTHON seed_dynamodb.py --table "$DYNAMODB_TABLE" --region "$DYNAMODB_REGION" && \
