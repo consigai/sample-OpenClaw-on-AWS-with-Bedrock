@@ -668,11 +668,9 @@ else
   cd "$SEED_DIR"
   # Use a temporary venv for seed scripts (avoids PEP 668 / macOS Homebrew conflicts)
   SEED_VENV="/tmp/openclaw-seed-venv"
-  if [ ! -x "$SEED_VENV/bin/python" ]; then
+  if [ ! -x "$SEED_VENV/bin/python" ] || [ ! -x "$SEED_VENV/bin/pip" ]; then
+    rm -rf "$SEED_VENV"
     python3 -m venv "$SEED_VENV"
-  fi
-  if [ ! -x "$SEED_VENV/bin/pip" ]; then
-    "$SEED_VENV/bin/python" -m ensurepip --upgrade
   fi
   "$SEED_VENV/bin/python" -m pip install -q -r requirements.txt
   # Use the venv's python for all seed commands
